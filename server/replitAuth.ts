@@ -130,10 +130,17 @@ export async function setupAuth(app: Express) {
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
   const user = req.user as any;
 
-  if (!req.isAuthenticated() || !user.expires_at) {
+  if (!req.isAuthenticated()) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
+  // PIN-based sessions don't have expires_at, only OAuth sessions do
+  // If no expires_at, this is a PIN login - just check if authenticated
+  if (!user.expires_at) {
+    return next();
+  }
+
+  // For OAuth sessions, check token expiration and refresh if needed
   const now = Math.floor(Date.now() / 1000);
   if (now <= user.expires_at) {
     return next();
