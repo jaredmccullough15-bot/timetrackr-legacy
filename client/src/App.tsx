@@ -16,12 +16,13 @@ import EmployeeDetail from "@/pages/admin/employee-detail";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
+  const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
 
   return (
     <Switch>
       {isLoading || !isAuthenticated ? (
         <Route path="/" component={Landing} />
-      ) : user?.isAdmin ? (
+      ) : isAdminOrManager ? (
         <>
           <Route path="/" component={AdminOverview} />
           <Route path="/admin" component={AdminOverview} />
@@ -39,7 +40,7 @@ function Router() {
 
 function AppContent() {
   const { user, isLoading } = useAuth();
-  const isAdmin = user?.isAdmin;
+  const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
 
   // Custom sidebar width for better admin navigation
   const style = {
@@ -49,7 +50,7 @@ function AppContent() {
 
   return (
     <TooltipProvider>
-      {!isLoading && isAdmin ? (
+      {!isLoading && isAdminOrManager ? (
         <SidebarProvider style={style as React.CSSProperties}>
           <div className="flex h-screen w-full">
             <AppSidebar />

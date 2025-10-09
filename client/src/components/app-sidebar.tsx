@@ -42,6 +42,7 @@ export function AppSidebar() {
   const { user } = useAuth();
 
   const initials = `${user?.firstName?.[0] || ''}${user?.lastName?.[0] || ''}`.toUpperCase() || 'A';
+  const panelType = user?.role === 'admin' ? 'Admin Panel' : 'Manager Panel';
 
   return (
     <Sidebar>
@@ -52,7 +53,7 @@ export function AppSidebar() {
           </div>
           <div>
             <div className="font-semibold text-sm">Time Clock</div>
-            <div className="text-xs text-muted-foreground">Admin Panel</div>
+            <div className="text-xs text-muted-foreground">{panelType}</div>
           </div>
         </div>
       </SidebarHeader>

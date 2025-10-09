@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
+import { useRole } from "@/hooks/useRole";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -35,12 +36,13 @@ interface EmployeeWithEntries {
 export default function AdminEmployees() {
   const [, navigate] = useLocation();
   const { user: currentUser, isLoading: authLoading } = useAuth();
+  const { canViewFinancialData } = useRole();
   const { toast } = useToast();
   const [editingEmployee, setEditingEmployee] = useState<User | null>(null);
   const [payRate, setPayRate] = useState("");
 
   useEffect(() => {
-    if (!authLoading && (!currentUser || !currentUser.isAdmin)) {
+    if (!authLoading && (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'manager'))) {
       toast({
         title: "Unauthorized",
         description: "You are logged out. Logging in again...",
@@ -55,7 +57,7 @@ export default function AdminEmployees() {
 
   const { data: employees, isLoading: employeesLoading } = useQuery<EmployeeWithEntries[]>({
     queryKey: ["/api/employees"],
-    enabled: !!currentUser?.isAdmin,
+    enabled: !!(currentUser?.role === 'admin' || currentUser?.role === 'manager'),
   });
 
   const updatePayRateMutation = useMutation({
@@ -167,30 +169,34 @@ export default function AdminEmployees() {
                         </div>
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleEditClick(employee.user);
-                      }}
-                      data-testid={`button-edit-${employee.user.id}`}
-                    >
-                      <Edit className="w-4 h-4" />
-                    </Button>
+                    {canViewFinancialData && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEditClick(employee.user);
+                        }}
+                        data-testid={`button-edit-${employee.user.id}`}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <DollarSign className="w-4 h-4" />
-                        <span>Pay Rate</span>
+                    {canViewFinancialData && (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <DollarSign className="w-4 h-4" />
+                          <span>Pay Rate</span>
+                        </div>
+                        <div className="text-lg font-semibold">
+                          {formatCurrency(parseFloat(employee.user.payRate || '0'))}/hr
+                        </div>
                       </div>
-                      <div className="text-lg font-semibold">
-                        {formatCurrency(parseFloat(employee.user.payRate || '0'))}/hr
-                      </div>
-                    </div>
+                    )}
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Clock className="w-4 h-4" />
@@ -200,15 +206,17 @@ export default function AdminEmployees() {
                         {formatDuration(employee.weeklyHours)}
                       </div>
                     </div>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <DollarSign className="w-4 h-4" />
-                        <span>Weekly Pay</span>
+                    {canViewFinancialData && (
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <DollarSign className="w-4 h-4" />
+                          <span>Weekly Pay</span>
+                        </div>
+                        <div className="text-lg font-semibold">
+                          {formatCurrency(weeklyPay)}
+                        </div>
                       </div>
-                      <div className="text-lg font-semibold">
-                        {formatCurrency(weeklyPay)}
-                      </div>
-                    </div>
+                    )}
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Heart className="w-4 h-4" />

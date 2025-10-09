@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
+import { useRole } from "@/hooks/useRole";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,6 +49,7 @@ export default function EmployeeDetail() {
   const params = useParams();
   const [, navigate] = useLocation();
   const { user: currentUser, isLoading: authLoading } = useAuth();
+  const { canViewFinancialData } = useRole();
   const { toast } = useToast();
   const [showEntryModal, setShowEntryModal] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
@@ -56,10 +58,10 @@ export default function EmployeeDetail() {
   const employeeId = params.id;
 
   useEffect(() => {
-    if (!authLoading && (!currentUser || !currentUser.isAdmin)) {
+    if (!authLoading && (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'manager'))) {
       toast({
         title: "Unauthorized",
-        description: "Admin access required",
+        description: "Manager or Admin access required",
         variant: "destructive",
       });
       navigate("/");
@@ -68,7 +70,7 @@ export default function EmployeeDetail() {
 
   const { data: employees } = useQuery<EmployeeWithEntries[]>({
     queryKey: ["/api/employees"],
-    enabled: !!currentUser?.isAdmin,
+    enabled: !!(currentUser?.role === 'admin' || currentUser?.role === 'manager'),
   });
 
   const employee = employees?.find((e) => e.user.id === employeeId);
@@ -135,13 +137,15 @@ export default function EmployeeDetail() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <DollarSign className="w-4 h-4" />
-                <span>Pay Rate</span>
+            {canViewFinancialData && (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <DollarSign className="w-4 h-4" />
+                  <span>Pay Rate</span>
+                </div>
+                <div className="font-semibold">{formatCurrency(parseFloat(employee.user.payRate || '0'))}/hr</div>
               </div>
-              <div className="font-semibold">{formatCurrency(parseFloat(employee.user.payRate || '0'))}/hr</div>
-            </div>
+            )}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Clock className="w-4 h-4" />

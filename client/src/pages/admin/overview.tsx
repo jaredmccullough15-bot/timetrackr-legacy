@@ -25,7 +25,7 @@ export default function AdminOverview() {
   const { toast } = useToast();
 
   useEffect(() => {
-    if (!authLoading && (!currentUser || !currentUser.isAdmin)) {
+    if (!authLoading && (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'manager'))) {
       toast({
         title: "Unauthorized",
         description: "You are logged out. Logging in again...",
@@ -40,7 +40,7 @@ export default function AdminOverview() {
 
   const { data: employees, isLoading: employeesLoading } = useQuery<EmployeeWithEntries[]>({
     queryKey: ["/api/employees"],
-    enabled: !!currentUser?.isAdmin,
+    enabled: !!(currentUser?.role === 'admin' || currentUser?.role === 'manager'),
   });
 
   if (authLoading || !currentUser || employeesLoading) {

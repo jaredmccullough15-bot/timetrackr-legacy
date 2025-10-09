@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { useRole } from "@/hooks/useRole";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -41,13 +42,14 @@ interface ReportEntry {
 
 export default function AdminReports() {
   const { user: currentUser, isLoading: authLoading } = useAuth();
+  const { canViewFinancialData } = useRole();
   const { toast } = useToast();
   const [selectedEmployee, setSelectedEmployee] = useState<string>("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
   useEffect(() => {
-    if (!authLoading && (!currentUser || !currentUser.isAdmin)) {
+    if (!authLoading && (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'manager'))) {
       toast({
         title: "Unauthorized",
         description: "You are logged out. Logging in again...",
@@ -62,7 +64,7 @@ export default function AdminReports() {
 
   const { data: employees } = useQuery<User[]>({
     queryKey: ["/api/employees/list"],
-    enabled: !!currentUser?.isAdmin,
+    enabled: !!(currentUser?.role === 'admin' || currentUser?.role === 'manager'),
   });
 
   const queryParams = new URLSearchParams();
@@ -83,7 +85,7 @@ export default function AdminReports() {
 
   const { data: reportData, isLoading: reportLoading } = useQuery<ReportEntry[]>({
     queryKey: [reportUrl],
-    enabled: !!currentUser?.isAdmin,
+    enabled: !!(currentUser?.role === 'admin' || currentUser?.role === 'manager'),
   });
 
   if (authLoading || !currentUser) {
@@ -173,7 +175,7 @@ export default function AdminReports() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${canViewFinancialData ? 'lg:grid-cols-5' : 'lg:grid-cols-3'} gap-6`}>
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">Total Entries</CardTitle>
@@ -202,26 +204,30 @@ export default function AdminReports() {
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Overtime Pay</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="stat-overtime-pay">
-              {formatCurrency(totalOvertimePay)}
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Total Pay</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold" data-testid="stat-report-total-pay">
-              {formatCurrency(totalPay)}
-            </div>
-          </CardContent>
-        </Card>
+        {canViewFinancialData && (
+          <>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">Overtime Pay</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="stat-overtime-pay">
+                  {formatCurrency(totalOvertimePay)}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">Total Pay</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold" data-testid="stat-report-total-pay">
+                  {formatCurrency(totalPay)}
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
 
       <Card>
@@ -255,9 +261,13 @@ export default function AdminReports() {
                     <TableHead className="text-right">Total Hours</TableHead>
                     <TableHead className="text-right">Regular Hrs</TableHead>
                     <TableHead className="text-right">OT Hrs</TableHead>
-                    <TableHead className="text-right">Regular Pay</TableHead>
-                    <TableHead className="text-right">OT Pay</TableHead>
-                    <TableHead className="text-right">Total Pay</TableHead>
+                    {canViewFinancialData && (
+                      <>
+                        <TableHead className="text-right">Regular Pay</TableHead>
+                        <TableHead className="text-right">OT Pay</TableHead>
+                        <TableHead className="text-right">Total Pay</TableHead>
+                      </>
+                    )}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -299,21 +309,25 @@ export default function AdminReports() {
                             "—"
                           )}
                         </TableCell>
-                        <TableCell className="text-right">
-                          {formatCurrency(item.regularPay)}
-                        </TableCell>
-                        <TableCell className="text-right" data-testid={`overtime-pay-${index}`}>
-                          {hasOvertime ? (
-                            <span style={{ color: 'var(--orange-600, #ea580c)' }} className="font-medium">
-                              {formatCurrency(item.overtimePay)}
-                            </span>
-                          ) : (
-                            "—"
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right font-medium">
-                          {formatCurrency(item.pay)}
-                        </TableCell>
+                        {canViewFinancialData && (
+                          <>
+                            <TableCell className="text-right">
+                              {formatCurrency(item.regularPay)}
+                            </TableCell>
+                            <TableCell className="text-right" data-testid={`overtime-pay-${index}`}>
+                              {hasOvertime ? (
+                                <span style={{ color: 'var(--orange-600, #ea580c)' }} className="font-medium">
+                                  {formatCurrency(item.overtimePay)}
+                                </span>
+                              ) : (
+                                "—"
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-medium">
+                              {formatCurrency(item.pay)}
+                            </TableCell>
+                          </>
+                        )}
                       </TableRow>
                     );
                   })}
