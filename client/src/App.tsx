@@ -12,6 +12,7 @@ import EmployeeDashboard from "@/pages/employee-dashboard";
 import AdminOverview from "@/pages/admin/overview";
 import AdminEmployees from "@/pages/admin/employees";
 import AdminReports from "@/pages/admin/reports";
+import EmployeeDetail from "@/pages/admin/employee-detail";
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -25,6 +26,7 @@ function Router() {
           <Route path="/" component={AdminOverview} />
           <Route path="/admin" component={AdminOverview} />
           <Route path="/admin/employees" component={AdminEmployees} />
+          <Route path="/admin/employees/:id" component={EmployeeDetail} />
           <Route path="/admin/reports" component={AdminReports} />
         </>
       ) : (

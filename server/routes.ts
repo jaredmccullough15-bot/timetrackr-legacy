@@ -2,11 +2,14 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import { recalculateSickTime } from "./sickTimeCalculator";
 import { 
   clockInSchema, 
   clockOutSchema, 
   updateEmployeeSchema,
-  reportQuerySchema 
+  reportQuerySchema,
+  createTimeEntrySchema,
+  updateTimeEntrySchema
 } from "@shared/schema";
 import { startOfWeek, endOfWeek } from "date-fns";
 
@@ -186,6 +189,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error updating pay rate:", error);
       res.status(400).json({ message: error.message || "Failed to update pay rate" });
+    }
+  });
+
+  // Admin time entry management routes
+  app.post('/api/admin/time-entries', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+
+      if (!currentUser?.isAdmin) {
+        return res.status(403).json({ message: "Forbidden: Admin access required" });
+      }
+
+      const validatedData = createTimeEntrySchema.parse(req.body);
+
+      const newEntry = await storage.createTimeEntry({
+        userId: validatedData.userId,
+        clockIn: new Date(validatedData.clockIn),
+        clockOut: validatedData.clockOut ? new Date(validatedData.clockOut) : null,
+      });
+
+      // Recalculate sick time for the employee
+      await recalculateSickTime(validatedData.userId);
+
+      res.json(newEntry);
+    } catch (error: any) {
+      console.error("Error creating time entry:", error);
+      res.status(400).json({ message: error.message || "Failed to create time entry" });
+    }
+  });
+
+  app.patch('/api/admin/time-entries/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+
+      if (!currentUser?.isAdmin) {
+        return res.status(403).json({ message: "Forbidden: Admin access required" });
+      }
+
+      const entryId = parseInt(req.params.id);
+      const validatedData = updateTimeEntrySchema.parse(req.body);
+
+      // Get the entry to find the user ID
+      const existingEntry = await storage.getTimeEntry(entryId);
+      if (!existingEntry) {
+        return res.status(404).json({ message: "Time entry not found" });
+      }
+
+      const updates: any = {};
+      if (validatedData.clockIn) {
+        updates.clockIn = new Date(validatedData.clockIn);
+      }
+      if (validatedData.clockOut !== undefined) {
+        updates.clockOut = validatedData.clockOut ? new Date(validatedData.clockOut) : null;
+      }
+
+      const updatedEntry = await storage.updateTimeEntry(entryId, updates);
+      
+      // Recalculate sick time for the employee
+      await recalculateSickTime(existingEntry.userId);
+
+      res.json(updatedEntry);
+    } catch (error: any) {
+      console.error("Error updating time entry:", error);
+      res.status(400).json({ message: error.message || "Failed to update time entry" });
+    }
+  });
+
+  app.delete('/api/admin/time-entries/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+
+      if (!currentUser?.isAdmin) {
+        return res.status(403).json({ message: "Forbidden: Admin access required" });
+      }
+
+      const entryId = parseInt(req.params.id);
+      
+      // Get the entry to find the user ID before deleting
+      const existingEntry = await storage.getTimeEntry(entryId);
+      if (!existingEntry) {
+        return res.status(404).json({ message: "Time entry not found" });
+      }
+
+      await storage.deleteTimeEntry(entryId);
+      
+      // Recalculate sick time for the employee after deletion
+      await recalculateSickTime(existingEntry.userId);
+
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error deleting time entry:", error);
+      res.status(400).json({ message: error.message || "Failed to delete time entry" });
     }
   });
 

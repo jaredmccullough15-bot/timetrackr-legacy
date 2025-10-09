@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
@@ -32,6 +33,7 @@ interface EmployeeWithEntries {
 }
 
 export default function AdminEmployees() {
+  const [, navigate] = useLocation();
   const { user: currentUser, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const [editingEmployee, setEditingEmployee] = useState<User | null>(null);
@@ -139,7 +141,12 @@ export default function AdminEmployees() {
             const sickTime = parseFloat(employee.user.sickTimeBalance || '0');
             
             return (
-              <Card key={employee.user.id} data-testid={`employee-detail-${employee.user.id}`}>
+              <Card 
+                key={employee.user.id} 
+                data-testid={`employee-detail-${employee.user.id}`}
+                className="hover-elevate cursor-pointer"
+                onClick={() => navigate(`/admin/employees/${employee.user.id}`)}
+              >
                 <CardHeader>
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -163,7 +170,10 @@ export default function AdminEmployees() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => handleEditClick(employee.user)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditClick(employee.user);
+                      }}
                       data-testid={`button-edit-${employee.user.id}`}
                     >
                       <Edit className="w-4 h-4" />

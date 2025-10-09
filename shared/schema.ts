@@ -93,9 +93,22 @@ export const reportQuerySchema = z.object({
   endDate: z.string().datetime().optional(),
 });
 
+export const createTimeEntrySchema = z.object({
+  userId: z.string(),
+  clockIn: z.string().datetime(),
+  clockOut: z.string().datetime().optional(),
+});
+
+export const updateTimeEntrySchema = z.object({
+  clockIn: z.string().datetime().optional(),
+  clockOut: z.string().datetime().optional().nullable(),
+});
+
 // TypeScript types
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type TimeEntry = typeof timeEntries.$inferSelect;
 export type InsertTimeEntry = typeof timeEntries.$inferInsert;
 export type UpdateEmployee = z.infer<typeof updateEmployeeSchema>;
+export type CreateTimeEntry = z.infer<typeof createTimeEntrySchema>;
+export type UpdateTimeEntry = z.infer<typeof updateTimeEntrySchema>;

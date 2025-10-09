@@ -6,6 +6,8 @@ import {
   type TimeEntry,
   type InsertTimeEntry,
   type UpdateEmployee,
+  type CreateTimeEntry,
+  type UpdateTimeEntry,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, isNull, not, desc } from "drizzle-orm";
@@ -26,6 +28,8 @@ export interface IStorage {
   getActiveTimeEntry(userId: string): Promise<TimeEntry | undefined>;
   createTimeEntry(entry: InsertTimeEntry): Promise<TimeEntry>;
   updateTimeEntry(id: number, updates: Partial<TimeEntry>): Promise<TimeEntry>;
+  deleteTimeEntry(id: number): Promise<void>;
+  getTimeEntry(id: number): Promise<TimeEntry | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -163,6 +167,18 @@ export class DatabaseStorage implements IStorage {
       throw new Error("Time entry not found");
     }
     
+    return entry;
+  }
+
+  async deleteTimeEntry(id: number): Promise<void> {
+    await db.delete(timeEntries).where(eq(timeEntries.id, id));
+  }
+
+  async getTimeEntry(id: number): Promise<TimeEntry | undefined> {
+    const [entry] = await db
+      .select()
+      .from(timeEntries)
+      .where(eq(timeEntries.id, id));
     return entry;
   }
 }
