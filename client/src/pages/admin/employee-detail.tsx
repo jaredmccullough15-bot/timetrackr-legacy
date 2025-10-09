@@ -27,9 +27,27 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { TimeEntryModal } from "@/components/TimeEntryModal";
-import { ArrowLeft, Plus, Edit, Trash2, DollarSign, Heart, Clock } from "lucide-react";
+import { ArrowLeft, Plus, Edit, Trash2, DollarSign, Heart, Clock, Shield } from "lucide-react";
 import { formatDuration, formatDateTime, formatCurrency } from "@/lib/timeUtils";
 import type { TimeEntry } from "@shared/schema";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface EmployeeWithEntries {
   user: {
@@ -40,6 +58,7 @@ interface EmployeeWithEntries {
     profileImageUrl?: string;
     payRate: string;
     sickTimeBalance: string;
+    role: 'employee' | 'manager' | 'admin';
   };
   entries: TimeEntry[];
   weeklyHours: number;
@@ -54,6 +73,8 @@ export default function EmployeeDetail() {
   const [showEntryModal, setShowEntryModal] = useState(false);
   const [editingEntry, setEditingEntry] = useState<TimeEntry | null>(null);
   const [deletingEntry, setDeletingEntry] = useState<TimeEntry | null>(null);
+  const [showRoleDialog, setShowRoleDialog] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<'employee' | 'manager' | 'admin'>('employee');
 
   const employeeId = params.id;
 
@@ -96,6 +117,43 @@ export default function EmployeeDetail() {
     },
   });
 
+  const updateRoleMutation = useMutation({
+    mutationFn: async ({ employeeId, role }: { employeeId: string; role: 'employee' | 'manager' | 'admin' }) => {
+      await apiRequest("PATCH", `/api/employees/${employeeId}/role`, { role });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      setShowRoleDialog(false);
+      toast({
+        title: "Success",
+        description: "Employee role updated successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update employee role.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleRoleClick = () => {
+    if (employee) {
+      setSelectedRole(employee.user.role);
+      setShowRoleDialog(true);
+    }
+  };
+
+  const handleSaveRole = () => {
+    if (employee && selectedRole) {
+      updateRoleMutation.mutate({
+        employeeId: employee.user.id,
+        role: selectedRole,
+      });
+    }
+  };
+
   if (!employee) {
     return (
       <div className="p-8">
@@ -130,13 +188,40 @@ export default function EmployeeDetail() {
                 <AvatarImage src={employee.user.profileImageUrl || undefined} className="object-cover" />
                 <AvatarFallback>{initials}</AvatarFallback>
               </Avatar>
-              <div>
+              <div className="flex-1">
                 <CardTitle>{employee.user.firstName} {employee.user.lastName}</CardTitle>
                 <CardDescription>{employee.user.email}</CardDescription>
+                <div className="flex gap-2 mt-2 flex-wrap">
+                  {employee.user.role === 'admin' && (
+                    <Badge variant="outline" className="capitalize">
+                      <Shield className="w-3 h-3 mr-1" />
+                      Admin
+                    </Badge>
+                  )}
+                  {employee.user.role === 'manager' && (
+                    <Badge variant="outline" className="capitalize">
+                      <Shield className="w-3 h-3 mr-1" />
+                      Manager
+                    </Badge>
+                  )}
+                </div>
               </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            {canViewFinancialData && employee.user.id !== currentUser?.id && (
+              <div className="mb-4">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleRoleClick}
+                  data-testid="button-change-role"
+                >
+                  <Shield className="w-4 h-4 mr-2" />
+                  Change Role
+                </Button>
+              </div>
+            )}
             {canViewFinancialData && (
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -258,6 +343,53 @@ export default function EmployeeDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={showRoleDialog} onOpenChange={setShowRoleDialog}>
+        <DialogContent data-testid="dialog-change-role">
+          <DialogHeader>
+            <DialogTitle>Change Employee Role</DialogTitle>
+            <DialogDescription>
+              Update role for {employee.user.firstName} {employee.user.lastName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="role">Role</Label>
+              <Select value={selectedRole} onValueChange={(value: 'employee' | 'manager' | 'admin') => setSelectedRole(value)}>
+                <SelectTrigger id="role" data-testid="select-role">
+                  <SelectValue placeholder="Select a role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="employee">Employee</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-muted-foreground">
+                {selectedRole === 'employee' && 'Employees can only view their own time entries'}
+                {selectedRole === 'manager' && 'Managers can view all employees and reports, but cannot view or edit financial data'}
+                {selectedRole === 'admin' && 'Admins have full access to all features including financial data'}
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowRoleDialog(false)}
+              data-testid="button-cancel-role"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveRole}
+              disabled={updateRoleMutation.isPending || !selectedRole}
+              data-testid="button-save-role"
+            >
+              {updateRoleMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
