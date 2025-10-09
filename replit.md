@@ -72,7 +72,8 @@ Preferred communication style: Simple, everyday language.
 **Schema Design:**
 
 1. **users table** - Employee profiles with authentication data
-   - Stores email, name, profile image, role (employee/manager/admin)
+   - Stores email (optional), name (required), profile image, role (employee/manager/admin)
+   - 4-digit PIN for authentication (unique, required, plain text)
    - Pay rate and sick time balance tracking
    - Timestamps for record keeping
    - Legacy isAdmin field maintained for backward compatibility
@@ -92,10 +93,17 @@ Preferred communication style: Simple, everyday language.
 
 ### Authentication & Authorization
 
-**Authentication Provider:**
-- Replit Auth using OpenID Connect (OIDC)
+**Authentication Model:**
+- **Employees:** PIN-only authentication (4-digit unique PIN)
+- **Admins:** Replit Auth using OpenID Connect (OIDC) for initial setup
 - Passport.js strategy for session management
 - PostgreSQL-backed session store via connect-pg-simple
+
+**PIN-Based Authentication Flow:**
+1. **Admin Setup:** Admins log in via Replit Auth and are auto-assigned a unique 4-digit PIN
+2. **Employee Creation:** Admins create employee accounts and assign 4-digit PINs
+3. **Employee Login:** Employees enter only their PIN to clock in/out (no email required)
+4. **PIN Storage:** PINs stored as plain text (4-digit varchar, unique constraint)
 
 **Session Management:**
 - 7-day session lifetime
@@ -105,12 +113,13 @@ Preferred communication style: Simple, everyday language.
 **Authorization Levels:**
 - **Employee:** Access to own time entries and dashboard only
 - **Manager:** Access to all employee data and reports, but cannot view or modify any financial information (pay rates, weekly pay, overtime pay, payroll)
-- **Admin:** Full access to all employees, reports, financial data, and configuration including pay rate management and role assignments
+- **Admin:** Full access to all employees, reports, financial data, employee creation, and configuration including pay rate management and role assignments
 - Role-based route protection on both frontend and backend
 - Financial data filtering implemented server-side for managers
 
 **Role Management:**
 - Admins can promote/demote users between Employee, Manager, and Admin roles
+- Admins can create new employee accounts with assigned PINs
 - Role change UI available on both Employees page and Employee Detail page
 - Users cannot change their own role (security measure)
 - Role badges display on employee cards for admin and manager roles
