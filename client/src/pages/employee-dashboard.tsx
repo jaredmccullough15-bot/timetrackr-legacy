@@ -21,17 +21,11 @@ export default function EmployeeDashboard() {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
+      // Redirect to PIN login instead of OAuth login
+      window.location.href = "/pin-login";
       return;
     }
-  }, [user, authLoading, toast]);
+  }, [user, authLoading]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -51,23 +45,34 @@ export default function EmployeeDashboard() {
         clockIn: new Date().toISOString(),
       });
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
       toast({
         title: "Clocked In",
         description: "Your time has been recorded successfully.",
       });
+      
+      // Auto-logout after clock in - wait for toast to be visible
+      setTimeout(async () => {
+        try {
+          // Wait for logout to complete before redirecting
+          await fetch("/api/auth/session-logout", {
+            method: "POST",
+            credentials: "include",
+          });
+          // Only redirect after successful logout
+          window.location.href = "/pin-login";
+        } catch (error) {
+          console.error("Logout error:", error);
+          // Still redirect even if logout fails
+          window.location.href = "/pin-login";
+        }
+      }, 1500);
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
+        // Redirect to PIN login instead of OAuth
+        window.location.href = "/pin-login";
         return;
       }
       toast({
@@ -84,24 +89,35 @@ export default function EmployeeDashboard() {
         clockOut: new Date().toISOString(),
       });
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
       toast({
         title: "Clocked Out",
         description: "Your time has been recorded successfully.",
       });
+      
+      // Auto-logout after clock out - wait for toast to be visible
+      setTimeout(async () => {
+        try {
+          // Wait for logout to complete before redirecting
+          await fetch("/api/auth/session-logout", {
+            method: "POST",
+            credentials: "include",
+          });
+          // Only redirect after successful logout
+          window.location.href = "/pin-login";
+        } catch (error) {
+          console.error("Logout error:", error);
+          // Still redirect even if logout fails
+          window.location.href = "/pin-login";
+        }
+      }, 1500);
     },
     onError: (error: Error) => {
       if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
+        // Redirect to PIN login instead of OAuth
+        window.location.href = "/pin-login";
         return;
       }
       toast({
@@ -152,6 +168,22 @@ export default function EmployeeDashboard() {
 
   const initials = `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`.toUpperCase() || 'U';
 
+  const handleManualLogout = async () => {
+    try {
+      // Wait for logout to complete before redirecting
+      await fetch("/api/auth/session-logout", {
+        method: "POST",
+        credentials: "include",
+      });
+      // Only redirect after successful logout
+      window.location.href = "/pin-login";
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Still redirect even if logout fails
+      window.location.href = "/pin-login";
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
@@ -172,7 +204,7 @@ export default function EmployeeDashboard() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => window.location.href = '/api/logout'}
+              onClick={handleManualLogout}
               data-testid="button-logout"
             >
               <LogOut className="w-4 h-4" />

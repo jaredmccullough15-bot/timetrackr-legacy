@@ -58,6 +58,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Session logout (for PIN users) - destroys session without redirect
+  app.post('/api/auth/session-logout', (req: any, res) => {
+    req.logout((err: any) => {
+      if (err) {
+        console.error("Error logging out:", err);
+        return res.status(500).json({ message: "Failed to logout" });
+      }
+      
+      // Destroy the session completely
+      req.session.destroy((destroyErr: any) => {
+        if (destroyErr) {
+          console.error("Error destroying session:", destroyErr);
+        }
+        // Clear the session cookie
+        res.clearCookie('connect.sid');
+        res.json({ message: "Logged out successfully" });
+      });
+    });
+  });
+
   // Time entry routes
   app.post('/api/time-entries/clock-in', isAuthenticated, async (req: any, res) => {
     try {
