@@ -10,12 +10,28 @@ export function getWeekBounds(date: Date = new Date()) {
 export function calculateHoursWorked(clockIn: string | Date, clockOut: string | Date): number {
   const start = typeof clockIn === 'string' ? parseISO(clockIn) : clockIn;
   const end = typeof clockOut === 'string' ? parseISO(clockOut) : clockOut;
-  return Math.max(0, differenceInHours(end, start, { roundingMethod: 'floor' }));
+  const milliseconds = end.getTime() - start.getTime();
+  const hours = milliseconds / (1000 * 60 * 60);
+  return Math.max(0, hours);
 }
 
 export function formatDuration(hours: number): string {
   const wholeHours = Math.floor(hours);
   const minutes = Math.round((hours - wholeHours) * 60);
+  
+  // If less than 1 minute, show seconds
+  if (wholeHours === 0 && minutes === 0) {
+    const seconds = Math.round(hours * 3600);
+    if (seconds === 0) {
+      return "0m";
+    }
+    return `${seconds}s`;
+  }
+  
+  // If less than 1 hour, show only minutes
+  if (wholeHours === 0) {
+    return `${minutes}m`;
+  }
   
   if (minutes === 0) {
     return `${wholeHours}h`;

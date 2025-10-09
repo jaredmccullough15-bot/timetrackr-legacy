@@ -73,8 +73,11 @@ export default function AdminReports() {
     queryParams.append("endDate", endDateTime.toISOString());
   }
 
+  const queryString = queryParams.toString();
+  const reportUrl = queryString ? `/api/reports?${queryString}` : "/api/reports";
+
   const { data: reportData, isLoading: reportLoading } = useQuery<ReportEntry[]>({
-    queryKey: ["/api/reports", queryParams.toString()],
+    queryKey: [reportUrl],
     enabled: !!currentUser?.isAdmin,
   });
 

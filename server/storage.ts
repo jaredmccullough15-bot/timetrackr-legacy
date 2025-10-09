@@ -8,7 +8,7 @@ import {
   type UpdateEmployee,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, gte, lte, isNull, desc } from "drizzle-orm";
+import { eq, and, gte, lte, isNull, not, desc } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (Required for Replit Auth)
@@ -112,13 +112,13 @@ export class DatabaseStorage implements IStorage {
     }
 
     // Only include completed entries (with clockOut)
-    conditions.push(isNull(timeEntries.clockOut).$not());
+    conditions.push(not(isNull(timeEntries.clockOut)));
 
     if (conditions.length === 0) {
       return await db
         .select()
         .from(timeEntries)
-        .where(isNull(timeEntries.clockOut).$not())
+        .where(not(isNull(timeEntries.clockOut)))
         .orderBy(desc(timeEntries.clockIn));
     }
 
