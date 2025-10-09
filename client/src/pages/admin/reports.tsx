@@ -31,7 +31,12 @@ interface ReportEntry {
   entry: TimeEntry;
   user: User;
   hours: number;
+  regularHours: number;
+  overtimeHours: number;
+  regularPay: number;
+  overtimePay: number;
   pay: number;
+  weekHours: number;
 }
 
 export default function AdminReports() {
@@ -91,7 +96,10 @@ export default function AdminReports() {
   }
 
   const totalHours = reportData?.reduce((sum, item) => sum + item.hours, 0) || 0;
+  const totalRegularHours = reportData?.reduce((sum, item) => sum + item.regularHours, 0) || 0;
+  const totalOvertimeHours = reportData?.reduce((sum, item) => sum + item.overtimeHours, 0) || 0;
   const totalPay = reportData?.reduce((sum, item) => sum + item.pay, 0) || 0;
+  const totalOvertimePay = reportData?.reduce((sum, item) => sum + item.overtimePay, 0) || 0;
   const totalEntries = reportData?.length || 0;
 
   return (
@@ -165,7 +173,7 @@ export default function AdminReports() {
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium">Total Entries</CardTitle>
@@ -176,11 +184,31 @@ export default function AdminReports() {
         </Card>
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Total Hours</CardTitle>
+            <CardTitle className="text-sm font-medium">Regular Hours</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold" data-testid="stat-report-total-hours">
-              {formatDuration(totalHours)}
+            <div className="text-2xl font-bold" data-testid="stat-regular-hours">
+              {formatDuration(totalRegularHours)}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">Overtime Hours</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="stat-overtime-hours">
+              {formatDuration(totalOvertimeHours)}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">Overtime Pay</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold" data-testid="stat-overtime-pay">
+              {formatCurrency(totalOvertimePay)}
             </div>
           </CardContent>
         </Card>
@@ -224,13 +252,18 @@ export default function AdminReports() {
                     <TableHead>Date</TableHead>
                     <TableHead>Clock In</TableHead>
                     <TableHead>Clock Out</TableHead>
-                    <TableHead className="text-right">Hours</TableHead>
-                    <TableHead className="text-right">Pay</TableHead>
+                    <TableHead className="text-right">Total Hours</TableHead>
+                    <TableHead className="text-right">Regular Hrs</TableHead>
+                    <TableHead className="text-right">OT Hrs</TableHead>
+                    <TableHead className="text-right">Regular Pay</TableHead>
+                    <TableHead className="text-right">OT Pay</TableHead>
+                    <TableHead className="text-right">Total Pay</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {reportData.map((item, index) => {
                     const initials = `${item.user.firstName?.[0] || ''}${item.user.lastName?.[0] || ''}`.toUpperCase() || 'U';
+                    const hasOvertime = item.overtimeHours > 0.01; // Use small threshold to avoid floating point issues
                     return (
                       <TableRow key={item.entry.id} data-testid={`report-row-${index}`}>
                         <TableCell>
@@ -253,6 +286,30 @@ export default function AdminReports() {
                         </TableCell>
                         <TableCell className="text-right font-medium">
                           {formatDuration(item.hours)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatDuration(item.regularHours)}
+                        </TableCell>
+                        <TableCell className="text-right" data-testid={`overtime-hours-${index}`}>
+                          {hasOvertime ? (
+                            <span style={{ color: 'var(--orange-600, #ea580c)' }} className="font-medium">
+                              {formatDuration(item.overtimeHours)}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(item.regularPay)}
+                        </TableCell>
+                        <TableCell className="text-right" data-testid={`overtime-pay-${index}`}>
+                          {hasOvertime ? (
+                            <span style={{ color: 'var(--orange-600, #ea580c)' }} className="font-medium">
+                              {formatCurrency(item.overtimePay)}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
                         </TableCell>
                         <TableCell className="text-right font-medium">
                           {formatCurrency(item.pay)}

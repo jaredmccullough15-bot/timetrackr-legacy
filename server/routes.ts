@@ -314,19 +314,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allUsers = await storage.getAllUsers();
       const userMap = new Map(allUsers.map(u => [u.id, u]));
 
-      // Format entries with user data and calculations
+      // Helper function to get the Sunday of the week for a given date
+      const getWeekStart = (date: Date): string => {
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day; // Subtract day of week to get to Sunday
+        const sunday = new Date(d.setDate(diff));
+        sunday.setHours(0, 0, 0, 0);
+        return sunday.toISOString();
+      };
+
+      // Group entries by user and week to calculate overtime
+      const userWeekHours = new Map<string, Map<string, number>>();
+      
+      entries.forEach(entry => {
+        if (entry.clockOut) {
+          const hours = (new Date(entry.clockOut).getTime() - new Date(entry.clockIn).getTime()) / (1000 * 60 * 60);
+          const weekStart = getWeekStart(new Date(entry.clockIn));
+          const key = `${entry.userId}-${weekStart}`;
+          
+          if (!userWeekHours.has(entry.userId)) {
+            userWeekHours.set(entry.userId, new Map());
+          }
+          const userWeeks = userWeekHours.get(entry.userId)!;
+          userWeeks.set(weekStart, (userWeeks.get(weekStart) || 0) + hours);
+        }
+      });
+
+      // Format entries with user data and overtime calculations
       const reportData = entries.map(entry => {
         const user = userMap.get(entry.userId);
         const hours = entry.clockOut
           ? (new Date(entry.clockOut).getTime() - new Date(entry.clockIn).getTime()) / (1000 * 60 * 60)
           : 0;
-        const pay = hours * parseFloat(user?.payRate || '0');
+        
+        const payRate = parseFloat(user?.payRate || '0');
+        const weekStart = getWeekStart(new Date(entry.clockIn));
+        const weekHours = userWeekHours.get(entry.userId)?.get(weekStart) || 0;
+        
+        // Calculate regular and overtime hours for this entry
+        // Distribute overtime proportionally across all entries in the week
+        let regularHours = hours;
+        let overtimeHours = 0;
+        
+        if (weekHours > 40) {
+          // Calculate the proportion of this entry's hours
+          const overtimeTotal = weekHours - 40;
+          overtimeHours = (hours / weekHours) * overtimeTotal;
+          regularHours = hours - overtimeHours;
+        }
+        
+        const regularPay = regularHours * payRate;
+        const overtimePay = overtimeHours * payRate * 1.5;
+        const totalPay = regularPay + overtimePay;
 
         return {
           entry,
           user,
           hours,
-          pay,
+          regularHours,
+          overtimeHours,
+          regularPay,
+          overtimePay,
+          pay: totalPay,
+          weekHours,
         };
       });
 

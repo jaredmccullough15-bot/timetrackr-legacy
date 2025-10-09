@@ -140,8 +140,15 @@ export default function EmployeeDashboard() {
     return total;
   }, 0);
 
-  const weeklyPay = weeklyHours * parseFloat(user.payRate || '0');
+  // Calculate overtime
+  const payRate = parseFloat(user.payRate || '0');
+  const regularHours = Math.min(weeklyHours, 40);
+  const overtimeHours = Math.max(weeklyHours - 40, 0);
+  const regularPay = regularHours * payRate;
+  const overtimePay = overtimeHours * payRate * 1.5;
+  const weeklyPay = regularPay + overtimePay;
   const sickTimeBalance = parseFloat(user.sickTimeBalance || '0');
+  const hasOvertime = weeklyHours > 40;
 
   const initials = `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`.toUpperCase() || 'U';
 
@@ -230,15 +237,15 @@ export default function EmployeeDashboard() {
             title="Weekly Hours"
             value={formatDuration(weeklyHours)}
             icon={TrendingUp}
-            description="Sunday - Saturday"
-            iconColor="text-chart-2"
+            description={hasOvertime ? `${formatDuration(overtimeHours)} overtime` : "Sunday - Saturday"}
+            iconColor={hasOvertime ? "text-orange-600 dark:text-orange-400" : "text-chart-2"}
             testId="stat-weekly-hours"
           />
           <StatCard
             title="Weekly Pay"
             value={formatCurrency(weeklyPay)}
             icon={DollarSign}
-            description={`${formatCurrency(parseFloat(user.payRate || '0'))}/hour`}
+            description={hasOvertime ? `Includes ${formatCurrency(overtimePay)} OT pay` : `${formatCurrency(parseFloat(user.payRate || '0'))}/hour`}
             iconColor="text-chart-3"
             testId="stat-weekly-pay"
           />
