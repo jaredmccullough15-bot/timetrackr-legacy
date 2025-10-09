@@ -298,27 +298,101 @@ export default function EmployeeDashboard() {
               </p>
             )}
 
-            <Button
-              size="lg"
-              className={`w-full min-h-24 text-xl ${isClockedIn ? 'bg-destructive hover:bg-destructive' : ''}`}
-              onClick={() => isClockedIn ? clockOutMutation.mutate() : clockInMutation.mutate()}
-              disabled={clockInMutation.isPending || clockOutMutation.isPending}
-              data-testid={isClockedIn ? "button-clock-out" : "button-clock-in"}
-            >
-              {clockInMutation.isPending || clockOutMutation.isPending ? (
-                "Processing..."
-              ) : isClockedIn ? (
-                <>
-                  <Clock className="w-6 h-6 mr-2" />
-                  Clock Out
-                </>
-              ) : (
-                <>
-                  <Clock className="w-6 h-6 mr-2" />
-                  Clock In
-                </>
-              )}
-            </Button>
+            <div className="space-y-3">
+              <Button
+                size="lg"
+                className={`w-full min-h-24 text-xl ${isClockedIn ? 'bg-destructive hover:bg-destructive' : ''}`}
+                onClick={() => isClockedIn ? clockOutMutation.mutate() : clockInMutation.mutate()}
+                disabled={clockInMutation.isPending || clockOutMutation.isPending}
+                data-testid={isClockedIn ? "button-clock-out" : "button-clock-in"}
+              >
+                {clockInMutation.isPending || clockOutMutation.isPending ? (
+                  "Processing..."
+                ) : isClockedIn ? (
+                  <>
+                    <Clock className="w-6 h-6 mr-2" />
+                    Clock Out
+                  </>
+                ) : (
+                  <>
+                    <Clock className="w-6 h-6 mr-2" />
+                    Clock In
+                  </>
+                )}
+              </Button>
+              
+              <Dialog open={isPtoDialogOpen} onOpenChange={setIsPtoDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="w-full" variant="outline" size="lg" data-testid="button-request-pto">
+                    <Calendar className="w-5 h-5 mr-2" />
+                    Request Time Off
+                  </Button>
+                </DialogTrigger>
+                <DialogContent data-testid="dialog-pto-request">
+                  <DialogHeader>
+                    <DialogTitle>Request Paid Time Off</DialogTitle>
+                    <DialogDescription>
+                      Submit a PTO request for approval. You have {formatDuration(ptoBalance)} available.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="grid gap-4 py-4">
+                    <div className="grid gap-2">
+                      <Label htmlFor="start-date">Start Date</Label>
+                      <Input
+                        id="start-date"
+                        type="date"
+                        value={ptoStartDate}
+                        onChange={(e) => setPtoStartDate(e.target.value)}
+                        data-testid="input-pto-start-date"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="end-date">End Date</Label>
+                      <Input
+                        id="end-date"
+                        type="date"
+                        value={ptoEndDate}
+                        onChange={(e) => setPtoEndDate(e.target.value)}
+                        data-testid="input-pto-end-date"
+                      />
+                    </div>
+                    <div className="grid gap-2">
+                      <Label htmlFor="hours">Hours Requested</Label>
+                      <Input
+                        id="hours"
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        max={ptoBalance}
+                        placeholder="e.g., 8 or 16"
+                        value={ptoHours}
+                        onChange={(e) => setPtoHours(e.target.value)}
+                        data-testid="input-pto-hours"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Cannot exceed your available balance ({formatDuration(ptoBalance)})
+                      </p>
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsPtoDialogOpen(false)}
+                      data-testid="button-cancel-pto"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handlePtoRequest}
+                      disabled={ptoRequestMutation.isPending}
+                      data-testid="button-submit-pto"
+                    >
+                      {ptoRequestMutation.isPending ? "Submitting..." : "Submit Request"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
           </CardContent>
         </Card>
 
@@ -356,78 +430,6 @@ export default function EmployeeDashboard() {
             testId="stat-pto"
           />
         </div>
-
-        <Dialog open={isPtoDialogOpen} onOpenChange={setIsPtoDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="w-full" variant="outline" data-testid="button-request-pto">
-              <Calendar className="w-4 h-4 mr-2" />
-              Request PTO
-            </Button>
-          </DialogTrigger>
-          <DialogContent data-testid="dialog-pto-request">
-            <DialogHeader>
-              <DialogTitle>Request Paid Time Off</DialogTitle>
-              <DialogDescription>
-                Submit a PTO request for approval. You have {formatDuration(ptoBalance)} available.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="start-date">Start Date</Label>
-                <Input
-                  id="start-date"
-                  type="date"
-                  value={ptoStartDate}
-                  onChange={(e) => setPtoStartDate(e.target.value)}
-                  data-testid="input-pto-start-date"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="end-date">End Date</Label>
-                <Input
-                  id="end-date"
-                  type="date"
-                  value={ptoEndDate}
-                  onChange={(e) => setPtoEndDate(e.target.value)}
-                  data-testid="input-pto-end-date"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="hours">Hours Requested</Label>
-                <Input
-                  id="hours"
-                  type="number"
-                  step="0.5"
-                  min="0"
-                  max={ptoBalance}
-                  placeholder="e.g., 8 or 16"
-                  value={ptoHours}
-                  onChange={(e) => setPtoHours(e.target.value)}
-                  data-testid="input-pto-hours"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Cannot exceed your available balance ({formatDuration(ptoBalance)})
-                </p>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setIsPtoDialogOpen(false)}
-                data-testid="button-cancel-pto"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handlePtoRequest}
-                disabled={ptoRequestMutation.isPending}
-                data-testid="button-submit-pto"
-              >
-                {ptoRequestMutation.isPending ? "Submitting..." : "Submit Request"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         {entriesLoading ? (
           <Card>
