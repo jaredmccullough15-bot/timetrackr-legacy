@@ -11,7 +11,9 @@ export default function Landing() {
 
   useEffect(() => {
     if (!isLoading && isAuthenticated && user) {
-      if (user.role === 'admin' || user.role === 'manager') {
+      if (!user.pinHash) {
+        navigate("/setup-pin");
+      } else if (user.role === 'admin' || user.role === 'manager') {
         navigate("/admin");
       } else {
         navigate("/dashboard");
@@ -32,14 +34,25 @@ export default function Landing() {
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
             Professional time tracking with automated sick time accrual, payroll calculation, and comprehensive reporting
           </p>
-          <Button 
-            size="lg" 
-            className="text-lg px-8"
-            onClick={() => window.location.href = '/api/login'}
-            data-testid="button-login"
-          >
-            Sign In to Continue
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <Button 
+              size="lg" 
+              className="text-lg px-8"
+              onClick={() => navigate("/pin-login")}
+              data-testid="button-pin-login"
+            >
+              Login with PIN
+            </Button>
+            <Button 
+              size="lg" 
+              variant="outline"
+              className="text-lg px-8"
+              onClick={() => window.location.href = '/api/login'}
+              data-testid="button-login"
+            >
+              First Time? Sign Up
+            </Button>
+          </div>
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mt-16">

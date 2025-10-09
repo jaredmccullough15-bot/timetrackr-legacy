@@ -13,11 +13,15 @@ import AdminOverview from "@/pages/admin/overview";
 import AdminEmployees from "@/pages/admin/employees";
 import AdminReports from "@/pages/admin/reports";
 import EmployeeDetail from "@/pages/admin/employee-detail";
+import SetupPin from "@/pages/setup-pin";
+import PinLogin from "@/pages/pin-login";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Landing} />
+      <Route path="/setup-pin" component={SetupPin} />
+      <Route path="/pin-login" component={PinLogin} />
       <Route path="/admin" component={AdminOverview} />
       <Route path="/admin/employees" component={AdminEmployees} />
       <Route path="/admin/employees/:id" component={EmployeeDetail} />
