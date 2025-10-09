@@ -17,6 +17,9 @@ import { z } from "zod";
 // User role enum
 export const userRoleEnum = pgEnum('user_role', ['employee', 'manager', 'admin']);
 
+// PTO request status enum
+export const ptoRequestStatusEnum = pgEnum('pto_request_status', ['pending', 'approved', 'denied']);
+
 // Session storage table - Required for Replit Auth
 export const sessions = pgTable(
   "sessions",
@@ -40,12 +43,14 @@ export const users = pgTable("users", {
   pin: varchar("pin", { length: 4 }).unique().notNull(), // 4-digit PIN for clock in/out (unique identifier)
   payRate: numeric("pay_rate", { precision: 10, scale: 2 }).default('0').notNull(),
   sickTimeBalance: numeric("sick_time_balance", { precision: 10, scale: 2 }).default('0').notNull(),
+  ptoBalance: numeric("pto_balance", { precision: 10, scale: 2 }).default('0').notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const usersRelations = relations(users, ({ many }) => ({
   timeEntries: many(timeEntries),
+  ptoRequests: many(ptoRequests),
 }));
 
 // Time entries table for clock in/out records
@@ -67,6 +72,37 @@ export const timeEntries = pgTable(
 export const timeEntriesRelations = relations(timeEntries, ({ one }) => ({
   user: one(users, {
     fields: [timeEntries.userId],
+    references: [users.id],
+  }),
+}));
+
+// PTO requests table for tracking employee PTO requests
+export const ptoRequests = pgTable(
+  "pto_requests",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+    startDate: timestamp("start_date").notNull(),
+    endDate: timestamp("end_date").notNull(),
+    hours: numeric("hours", { precision: 10, scale: 2 }).notNull(),
+    status: ptoRequestStatusEnum("status").default('pending').notNull(),
+    reviewedBy: varchar("reviewed_by").references(() => users.id),
+    reviewedAt: timestamp("reviewed_at"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("IDX_pto_requests_user_id").on(table.userId),
+    index("IDX_pto_requests_status").on(table.status),
+  ]
+);
+
+export const ptoRequestsRelations = relations(ptoRequests, ({ one }) => ({
+  user: one(users, {
+    fields: [ptoRequests.userId],
+    references: [users.id],
+  }),
+  reviewer: one(users, {
+    fields: [ptoRequests.reviewedBy],
     references: [users.id],
   }),
 }));
@@ -123,6 +159,20 @@ export const pinLoginSchema = z.object({
   pin: z.string().regex(/^\d{4}$/, "PIN must be exactly 4 digits"),
 });
 
+export const createPtoRequestSchema = z.object({
+  startDate: z.string().datetime(),
+  endDate: z.string().datetime(),
+  hours: z.string().regex(/^\d+(\.\d{1,2})?$/, "Invalid hours format"),
+});
+
+export const reviewPtoRequestSchema = z.object({
+  status: z.enum(['approved', 'denied']),
+});
+
+export const updatePtoBalanceSchema = z.object({
+  ptoBalance: z.string().regex(/^\d+(\.\d{1,2})?$/, "Invalid PTO balance format"),
+});
+
 // TypeScript types
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -131,3 +181,7 @@ export type InsertTimeEntry = typeof timeEntries.$inferInsert;
 export type UpdateEmployee = z.infer<typeof updateEmployeeSchema>;
 export type CreateTimeEntry = z.infer<typeof createTimeEntrySchema>;
 export type UpdateTimeEntry = z.infer<typeof updateTimeEntrySchema>;
+export type PtoRequest = typeof ptoRequests.$inferSelect;
+export type CreatePtoRequest = z.infer<typeof createPtoRequestSchema>;
+export type ReviewPtoRequest = z.infer<typeof reviewPtoRequestSchema>;
+export type UpdatePtoBalance = z.infer<typeof updatePtoBalanceSchema>;
