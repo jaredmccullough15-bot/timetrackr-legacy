@@ -12,6 +12,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -22,7 +29,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { ClockStatusBadge } from "@/components/ClockStatusBadge";
-import { Users, DollarSign, Heart, Clock, Edit } from "lucide-react";
+import { Users, DollarSign, Heart, Clock, Edit, Shield } from "lucide-react";
 import { formatCurrency, formatDuration } from "@/lib/timeUtils";
 import type { User, TimeEntry } from "@shared/schema";
 
@@ -40,6 +47,8 @@ export default function AdminEmployees() {
   const { toast } = useToast();
   const [editingEmployee, setEditingEmployee] = useState<User | null>(null);
   const [payRate, setPayRate] = useState("");
+  const [changingRoleEmployee, setChangingRoleEmployee] = useState<User | null>(null);
+  const [selectedRole, setSelectedRole] = useState<'employee' | 'manager' | 'admin'>('employee');
 
   useEffect(() => {
     if (!authLoading && (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'manager'))) {
@@ -93,9 +102,46 @@ export default function AdminEmployees() {
     },
   });
 
+  const updateRoleMutation = useMutation({
+    mutationFn: async ({ employeeId, role }: { employeeId: string; role: 'employee' | 'manager' | 'admin' }) => {
+      await apiRequest("PATCH", `/api/employees/${employeeId}/role`, { role });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      setChangingRoleEmployee(null);
+      toast({
+        title: "Success",
+        description: "Employee role updated successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update employee role.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleEditClick = (employee: User) => {
     setEditingEmployee(employee);
     setPayRate(employee.payRate || '0');
+  };
+
+  const handleRoleClick = (employee: User) => {
+    setChangingRoleEmployee(employee);
+    setSelectedRole(employee.role);
   };
 
   const handleSavePayRate = () => {
@@ -103,6 +149,15 @@ export default function AdminEmployees() {
       updatePayRateMutation.mutate({
         employeeId: editingEmployee.id,
         payRate,
+      });
+    }
+  };
+
+  const handleSaveRole = () => {
+    if (changingRoleEmployee && selectedRole) {
+      updateRoleMutation.mutate({
+        employeeId: changingRoleEmployee.id,
+        role: selectedRole,
       });
     }
   };
@@ -163,8 +218,31 @@ export default function AdminEmployees() {
                         <CardDescription className="truncate">{employee.user.email}</CardDescription>
                         <div className="flex gap-2 mt-2 flex-wrap">
                           <ClockStatusBadge isClockedIn={employee.isClockedIn} />
-                          {employee.user.isAdmin && (
-                            <Badge variant="outline">Admin</Badge>
+                          {employee.user.role === 'admin' && (
+                            <Badge variant="outline" className="capitalize">
+                              <Shield className="w-3 h-3 mr-1" />
+                              Admin
+                            </Badge>
+                          )}
+                          {employee.user.role === 'manager' && (
+                            <Badge variant="outline" className="capitalize">
+                              <Shield className="w-3 h-3 mr-1" />
+                              Manager
+                            </Badge>
+                          )}
+                          {canViewFinancialData && employee.user.id !== currentUser.id && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 px-2"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRoleClick(employee.user);
+                              }}
+                              data-testid={`button-change-role-${employee.user.id}`}
+                            >
+                              Change Role
+                            </Button>
                           )}
                         </div>
                       </div>
@@ -275,6 +353,53 @@ export default function AdminEmployees() {
               data-testid="button-save-pay-rate"
             >
               {updatePayRateMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!changingRoleEmployee} onOpenChange={(open) => !open && setChangingRoleEmployee(null)}>
+        <DialogContent data-testid="dialog-change-role">
+          <DialogHeader>
+            <DialogTitle>Change Employee Role</DialogTitle>
+            <DialogDescription>
+              Update role for {changingRoleEmployee?.firstName} {changingRoleEmployee?.lastName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="role">Role</Label>
+              <Select value={selectedRole} onValueChange={(value: 'employee' | 'manager' | 'admin') => setSelectedRole(value)}>
+                <SelectTrigger id="role" data-testid="select-role">
+                  <SelectValue placeholder="Select a role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="employee">Employee</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-muted-foreground">
+                {selectedRole === 'employee' && 'Employees can only view their own time entries'}
+                {selectedRole === 'manager' && 'Managers can view all employees and reports, but cannot view or edit financial data'}
+                {selectedRole === 'admin' && 'Admins have full access to all features including financial data'}
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setChangingRoleEmployee(null)}
+              data-testid="button-cancel-role"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveRole}
+              disabled={updateRoleMutation.isPending || !selectedRole}
+              data-testid="button-save-role"
+            >
+              {updateRoleMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
