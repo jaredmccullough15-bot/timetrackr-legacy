@@ -101,9 +101,11 @@ Preferred communication style: Simple, everyday language.
 - Session data persisted in database
 
 **Authorization Levels:**
-- Employee: Access to own time entries and dashboard
-- Admin: Full access to all employees, reports, and configuration
+- **Employee:** Access to own time entries and dashboard only
+- **Manager:** Access to all employee data and reports, but cannot view or modify any financial information (pay rates, weekly pay, overtime pay, payroll)
+- **Admin:** Full access to all employees, reports, financial data, and configuration including pay rate management
 - Role-based route protection on both frontend and backend
+- Financial data filtering implemented server-side for managers
 
 ### External Dependencies
 

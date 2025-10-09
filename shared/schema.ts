@@ -5,6 +5,7 @@ import {
   integer,
   jsonb,
   numeric,
+  pgEnum,
   pgTable,
   timestamp,
   varchar,
@@ -12,6 +13,9 @@ import {
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// User role enum
+export const userRoleEnum = pgEnum('user_role', ['employee', 'manager', 'admin']);
 
 // Session storage table - Required for Replit Auth
 export const sessions = pgTable(
@@ -31,7 +35,8 @@ export const users = pgTable("users", {
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
-  isAdmin: boolean("is_admin").default(false).notNull(),
+  role: userRoleEnum("role").default('employee').notNull(),
+  isAdmin: boolean("is_admin").default(false).notNull(), // Deprecated - kept for backwards compatibility during migration
   payRate: numeric("pay_rate", { precision: 10, scale: 2 }).default('0').notNull(),
   sickTimeBalance: numeric("sick_time_balance", { precision: 10, scale: 2 }).default('0').notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -76,7 +81,8 @@ export const upsertUserSchema = createInsertSchema(users).pick({
 
 export const updateEmployeeSchema = z.object({
   payRate: z.string().regex(/^\d+(\.\d{1,2})?$/, "Invalid pay rate format"),
-  isAdmin: z.boolean().optional(),
+  isAdmin: z.boolean().optional(), // Deprecated
+  role: z.enum(['employee', 'manager', 'admin']).optional(),
 });
 
 export const clockInSchema = z.object({

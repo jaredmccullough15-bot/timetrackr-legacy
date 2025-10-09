@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
+import { useRole } from "@/hooks/useRole";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -20,6 +21,7 @@ interface EmployeeWithEntries {
 
 export default function AdminOverview() {
   const { user: currentUser, isLoading: authLoading } = useAuth();
+  const { canViewFinancialData } = useRole();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -73,7 +75,7 @@ export default function AdminOverview() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className={`grid grid-cols-1 md:grid-cols-2 ${canViewFinancialData ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-6`}>
         <StatCard
           title="Total Employees"
           value={totalEmployees}
@@ -97,14 +99,16 @@ export default function AdminOverview() {
           iconColor="text-chart-3"
           testId="stat-total-weekly-hours"
         />
-        <StatCard
-          title="Weekly Payroll"
-          value={formatCurrency(totalWeeklyPay)}
-          icon={DollarSign}
-          description="Estimated for this week"
-          iconColor="text-chart-4"
-          testId="stat-total-weekly-payroll"
-        />
+        {canViewFinancialData && (
+          <StatCard
+            title="Weekly Payroll"
+            value={formatCurrency(totalWeeklyPay)}
+            icon={DollarSign}
+            description="Estimated for this week"
+            iconColor="text-chart-4"
+            testId="stat-total-weekly-payroll"
+          />
+        )}
       </div>
 
       <Card>
@@ -142,15 +146,17 @@ export default function AdminOverview() {
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <ClockStatusBadge isClockedIn={employee.isClockedIn} />
-                      <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className={`grid ${canViewFinancialData ? 'grid-cols-2' : 'grid-cols-1'} gap-4 text-sm`}>
                         <div>
                           <div className="text-muted-foreground">Hours</div>
                           <div className="font-semibold">{formatDuration(employee.weeklyHours)}</div>
                         </div>
-                        <div>
-                          <div className="text-muted-foreground">Pay</div>
-                          <div className="font-semibold">{formatCurrency(weeklyPay)}</div>
-                        </div>
+                        {canViewFinancialData && (
+                          <div>
+                            <div className="text-muted-foreground">Pay</div>
+                            <div className="font-semibold">{formatCurrency(weeklyPay)}</div>
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>

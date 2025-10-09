@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { recalculateSickTime } from "./sickTimeCalculator";
+import { isAdmin, isAdminOrManager, canViewFinancialData } from "./roleUtils";
 import { 
   clockInSchema, 
   clockOutSchema, 
@@ -108,8 +109,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const currentUser = await storage.getUser(userId);
 
-      if (!currentUser?.isAdmin) {
-        return res.status(403).json({ message: "Forbidden: Admin access required" });
+      if (!isAdminOrManager(currentUser)) {
+        return res.status(403).json({ message: "Forbidden: Admin or Manager access required" });
       }
 
       const allUsers = await storage.getAllUsers();
@@ -139,8 +140,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Check if currently clocked in
           const isClockedIn = entries.some(entry => !entry.clockOut);
 
+          // Filter financial data for managers
+          const userData = canViewFinancialData(currentUser) 
+            ? user 
+            : { ...user, payRate: '0' };
+
           return {
-            user,
+            user: userData,
             entries,
             weeklyHours,
             isClockedIn,
@@ -160,12 +166,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const currentUser = await storage.getUser(userId);
 
-      if (!currentUser?.isAdmin) {
-        return res.status(403).json({ message: "Forbidden: Admin access required" });
+      if (!isAdminOrManager(currentUser)) {
+        return res.status(403).json({ message: "Forbidden: Admin or Manager access required" });
       }
 
       const allUsers = await storage.getAllUsers();
-      res.json(allUsers);
+      
+      // Filter financial data for managers
+      const filteredUsers = canViewFinancialData(currentUser)
+        ? allUsers
+        : allUsers.map(u => ({ ...u, payRate: '0' }));
+      
+      res.json(filteredUsers);
     } catch (error) {
       console.error("Error fetching employee list:", error);
       res.status(500).json({ message: "Failed to fetch employee list" });
@@ -177,7 +189,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const currentUser = await storage.getUser(userId);
 
-      if (!currentUser?.isAdmin) {
+      if (!isAdmin(currentUser)) {
         return res.status(403).json({ message: "Forbidden: Admin access required" });
       }
 
@@ -198,8 +210,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const currentUser = await storage.getUser(userId);
 
-      if (!currentUser?.isAdmin) {
-        return res.status(403).json({ message: "Forbidden: Admin access required" });
+      if (!isAdminOrManager(currentUser)) {
+        return res.status(403).json({ message: "Forbidden: Admin or Manager access required" });
       }
 
       const validatedData = createTimeEntrySchema.parse(req.body);
@@ -225,8 +237,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const currentUser = await storage.getUser(userId);
 
-      if (!currentUser?.isAdmin) {
-        return res.status(403).json({ message: "Forbidden: Admin access required" });
+      if (!isAdminOrManager(currentUser)) {
+        return res.status(403).json({ message: "Forbidden: Admin or Manager access required" });
       }
 
       const entryId = parseInt(req.params.id);
@@ -263,8 +275,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const currentUser = await storage.getUser(userId);
 
-      if (!currentUser?.isAdmin) {
-        return res.status(403).json({ message: "Forbidden: Admin access required" });
+      if (!isAdminOrManager(currentUser)) {
+        return res.status(403).json({ message: "Forbidden: Admin or Manager access required" });
       }
 
       const entryId = parseInt(req.params.id);
@@ -293,8 +305,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const currentUser = await storage.getUser(userId);
 
-      if (!currentUser?.isAdmin) {
-        return res.status(403).json({ message: "Forbidden: Admin access required" });
+      if (!isAdminOrManager(currentUser)) {
+        return res.status(403).json({ message: "Forbidden: Admin or Manager access required" });
       }
 
       const employeeId = req.query.employeeId as string | undefined;
@@ -368,17 +380,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const overtimePay = overtimeHours * payRate * 1.5;
         const totalPay = regularPay + overtimePay;
 
-        return {
-          entry,
-          user,
-          hours,
-          regularHours,
-          overtimeHours,
-          regularPay,
-          overtimePay,
-          pay: totalPay,
-          weekHours,
-        };
+        // Filter financial data for managers
+        if (canViewFinancialData(currentUser)) {
+          return {
+            entry,
+            user,
+            hours,
+            regularHours,
+            overtimeHours,
+            regularPay,
+            overtimePay,
+            pay: totalPay,
+            weekHours,
+          };
+        } else {
+          // Managers don't see financial data
+          return {
+            entry,
+            user: { ...user, payRate: '0' },
+            hours,
+            regularHours,
+            overtimeHours,
+            regularPay: 0,
+            overtimePay: 0,
+            pay: 0,
+            weekHours,
+          };
+        }
       });
 
       res.json(reportData);
