@@ -52,8 +52,9 @@ Preferred communication style: Simple, everyday language.
 **Key API Endpoints:**
 - `/api/auth/user` - Get authenticated user information
 - `/api/time-entries/*` - Clock in/out and time entry management
-- `/api/employees` - Employee management (admin only)
-- `/api/reports` - Payroll and time reports (admin only)
+- `/api/employees` - Employee management (admin/manager access)
+- `/api/employees/:id/role` - Role management (admin-only, PATCH)
+- `/api/reports` - Payroll and time reports (admin/manager access)
 
 **Business Logic:**
 - Automatic sick time accrual (1 hour per 30 hours worked)
@@ -71,9 +72,10 @@ Preferred communication style: Simple, everyday language.
 **Schema Design:**
 
 1. **users table** - Employee profiles with authentication data
-   - Stores email, name, profile image, admin status
+   - Stores email, name, profile image, role (employee/manager/admin)
    - Pay rate and sick time balance tracking
    - Timestamps for record keeping
+   - Legacy isAdmin field maintained for backward compatibility
 
 2. **timeEntries table** - Clock in/out records
    - Foreign key relationship to users (cascade delete)
@@ -103,9 +105,16 @@ Preferred communication style: Simple, everyday language.
 **Authorization Levels:**
 - **Employee:** Access to own time entries and dashboard only
 - **Manager:** Access to all employee data and reports, but cannot view or modify any financial information (pay rates, weekly pay, overtime pay, payroll)
-- **Admin:** Full access to all employees, reports, financial data, and configuration including pay rate management
+- **Admin:** Full access to all employees, reports, financial data, and configuration including pay rate management and role assignments
 - Role-based route protection on both frontend and backend
 - Financial data filtering implemented server-side for managers
+
+**Role Management:**
+- Admins can promote/demote users between Employee, Manager, and Admin roles
+- Role change UI available on both Employees page and Employee Detail page
+- Users cannot change their own role (security measure)
+- Role badges display on employee cards for admin and manager roles
+- Shield icon buttons provide quick access to role management
 
 ### External Dependencies
 

@@ -1,8 +1,24 @@
+import { useEffect } from "react";
+import { useLocation } from "wouter";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Clock, TrendingUp, Users, DollarSign } from "lucide-react";
 
 export default function Landing() {
+  const [, navigate] = useLocation();
+  const { user, isAuthenticated, isLoading } = useAuth();
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && user) {
+      if (user.role === 'admin' || user.role === 'manager') {
+        navigate("/admin");
+      } else {
+        navigate("/dashboard");
+      }
+    }
+  }, [isLoading, isAuthenticated, user, navigate]);
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-16 max-w-6xl">

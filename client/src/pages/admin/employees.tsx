@@ -230,36 +230,37 @@ export default function AdminEmployees() {
                               Manager
                             </Badge>
                           )}
-                          {canViewFinancialData && employee.user.id !== currentUser.id && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-6 px-2"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRoleClick(employee.user);
-                              }}
-                              data-testid={`button-change-role-${employee.user.id}`}
-                            >
-                              Change Role
-                            </Button>
-                          )}
                         </div>
                       </div>
                     </div>
-                    {canViewFinancialData && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleEditClick(employee.user);
-                        }}
-                        data-testid={`button-edit-${employee.user.id}`}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                    )}
+                    <div className="flex gap-1">
+                      {canViewFinancialData && employee.user.id !== currentUser.id && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRoleClick(employee.user);
+                          }}
+                          data-testid={`button-change-role-${employee.user.id}`}
+                        >
+                          <Shield className="w-4 h-4" />
+                        </Button>
+                      )}
+                      {canViewFinancialData && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditClick(employee.user);
+                          }}
+                          data-testid={`button-edit-${employee.user.id}`}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>

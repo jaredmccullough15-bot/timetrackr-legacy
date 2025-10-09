@@ -15,24 +15,14 @@ import AdminReports from "@/pages/admin/reports";
 import EmployeeDetail from "@/pages/admin/employee-detail";
 
 function Router() {
-  const { isAuthenticated, isLoading, user } = useAuth();
-  const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
-
   return (
     <Switch>
-      {isLoading || !isAuthenticated ? (
-        <Route path="/" component={Landing} />
-      ) : isAdminOrManager ? (
-        <>
-          <Route path="/" component={AdminOverview} />
-          <Route path="/admin" component={AdminOverview} />
-          <Route path="/admin/employees" component={AdminEmployees} />
-          <Route path="/admin/employees/:id" component={EmployeeDetail} />
-          <Route path="/admin/reports" component={AdminReports} />
-        </>
-      ) : (
-        <Route path="/" component={EmployeeDashboard} />
-      )}
+      <Route path="/" component={Landing} />
+      <Route path="/admin" component={AdminOverview} />
+      <Route path="/admin/employees" component={AdminEmployees} />
+      <Route path="/admin/employees/:id" component={EmployeeDetail} />
+      <Route path="/admin/reports" component={AdminReports} />
+      <Route path="/dashboard" component={EmployeeDashboard} />
       <Route component={NotFound} />
     </Switch>
   );
