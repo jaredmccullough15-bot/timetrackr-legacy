@@ -11,9 +11,7 @@ export default function Landing() {
 
   useEffect(() => {
     if (!isLoading && isAuthenticated && user) {
-      if (!user.pinHash) {
-        navigate("/setup-pin");
-      } else if (user.role === 'admin' || user.role === 'manager') {
+      if (user.role === 'admin' || user.role === 'manager') {
         navigate("/admin");
       } else {
         navigate("/dashboard");
@@ -41,18 +39,22 @@ export default function Landing() {
               onClick={() => navigate("/pin-login")}
               data-testid="button-pin-login"
             >
-              Login with PIN
+              <Clock className="w-5 h-5 mr-2" />
+              Clock In/Out
             </Button>
             <Button 
               size="lg" 
               variant="outline"
               className="text-lg px-8"
               onClick={() => window.location.href = '/api/login'}
-              data-testid="button-login"
+              data-testid="button-admin-login"
             >
-              First Time? Sign Up
+              Admin Setup
             </Button>
           </div>
+          <p className="text-sm text-muted-foreground mt-4">
+            Don't have a PIN? Contact your administrator
+          </p>
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mt-16">
