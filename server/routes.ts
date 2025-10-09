@@ -12,7 +12,10 @@ import {
   createTimeEntrySchema,
   updateTimeEntrySchema,
   createEmployeeSchema,
-  pinLoginSchema
+  pinLoginSchema,
+  createPtoRequestSchema,
+  reviewPtoRequestSchema,
+  updatePtoBalanceSchema
 } from "@shared/schema";
 import { startOfWeek, endOfWeek } from "date-fns";
 import bcrypt from "bcryptjs";
@@ -531,6 +534,142 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error generating report:", error);
       res.status(500).json({ message: "Failed to generate report" });
+    }
+  });
+
+  // PTO Request routes
+  // Create PTO request (employees only)
+  app.post('/api/pto-requests', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      const validatedData = createPtoRequestSchema.parse(req.body);
+      const requestedHours = parseFloat(validatedData.hours);
+      const ptoBalance = parseFloat(user.ptoBalance || '0');
+      
+      // Check if user has enough PTO balance
+      if (requestedHours > ptoBalance) {
+        return res.status(400).json({ 
+          message: `Insufficient PTO balance. You have ${ptoBalance} hours available.` 
+        });
+      }
+      
+      const newRequest = await storage.createPtoRequest({
+        userId,
+        startDate: new Date(validatedData.startDate),
+        endDate: new Date(validatedData.endDate),
+        hours: validatedData.hours,
+        status: 'pending',
+      });
+      
+      res.json(newRequest);
+    } catch (error: any) {
+      console.error("Error creating PTO request:", error);
+      res.status(400).json({ message: error.message || "Failed to create PTO request" });
+    }
+  });
+
+  // Get PTO requests (employees see their own, admins/managers see all)
+  app.get('/api/pto-requests', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+      
+      let requests;
+      if (isAdminOrManager(currentUser)) {
+        // Admins and managers see all requests
+        requests = await storage.getAllPtoRequests();
+      } else {
+        // Employees see only their own requests
+        requests = await storage.getUserPtoRequests(userId);
+      }
+      
+      res.json(requests);
+    } catch (error) {
+      console.error("Error fetching PTO requests:", error);
+      res.status(500).json({ message: "Failed to fetch PTO requests" });
+    }
+  });
+
+  // Review PTO request (approve/deny) - admin/manager only
+  app.patch('/api/pto-requests/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+      const requestId = parseInt(req.params.id);
+      
+      if (!isAdminOrManager(currentUser)) {
+        return res.status(403).json({ message: "Forbidden: Admin or Manager access required" });
+      }
+      
+      const validatedData = reviewPtoRequestSchema.parse(req.body);
+      const ptoRequest = await storage.getPtoRequest(requestId);
+      
+      if (!ptoRequest) {
+        return res.status(404).json({ message: "PTO request not found" });
+      }
+      
+      if (ptoRequest.status !== 'pending') {
+        return res.status(400).json({ message: "PTO request has already been reviewed" });
+      }
+      
+      // Update request status
+      const updatedRequest = await storage.updatePtoRequest(requestId, {
+        status: validatedData.status,
+        reviewedBy: userId,
+        reviewedAt: new Date(),
+      });
+      
+      // If approved, deduct PTO from user's balance
+      if (validatedData.status === 'approved') {
+        const employee = await storage.getUser(ptoRequest.userId);
+        
+        if (!employee) {
+          return res.status(404).json({ message: "Employee not found" });
+        }
+        
+        const currentBalance = parseFloat(employee.ptoBalance || '0');
+        const requestHours = parseFloat(ptoRequest.hours);
+        const newBalance = (currentBalance - requestHours).toFixed(2);
+        
+        await storage.updateEmployee(ptoRequest.userId, {
+          ptoBalance: newBalance,
+        });
+      }
+      
+      res.json(updatedRequest);
+    } catch (error: any) {
+      console.error("Error reviewing PTO request:", error);
+      res.status(400).json({ message: error.message || "Failed to review PTO request" });
+    }
+  });
+
+  // Update employee PTO balance - admin/manager only
+  app.patch('/api/employees/:id/pto', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+      const employeeId = req.params.id;
+      
+      if (!isAdminOrManager(currentUser)) {
+        return res.status(403).json({ message: "Forbidden: Admin or Manager access required" });
+      }
+      
+      const validatedData = updatePtoBalanceSchema.parse(req.body);
+      
+      const updatedEmployee = await storage.updateEmployee(employeeId, {
+        ptoBalance: validatedData.ptoBalance,
+      });
+      
+      res.json(updatedEmployee);
+    } catch (error: any) {
+      console.error("Error updating PTO balance:", error);
+      res.status(400).json({ message: error.message || "Failed to update PTO balance" });
     }
   });
 

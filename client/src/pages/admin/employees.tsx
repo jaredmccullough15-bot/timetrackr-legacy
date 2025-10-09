@@ -29,7 +29,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { ClockStatusBadge } from "@/components/ClockStatusBadge";
-import { Users, DollarSign, Heart, Clock, Edit, Shield, Plus } from "lucide-react";
+import { Users, DollarSign, Heart, Clock, Edit, Shield, Plus, Calendar } from "lucide-react";
 import { formatCurrency, formatDuration } from "@/lib/timeUtils";
 import type { User, TimeEntry } from "@shared/schema";
 
@@ -47,6 +47,8 @@ export default function AdminEmployees() {
   const { toast } = useToast();
   const [editingEmployee, setEditingEmployee] = useState<User | null>(null);
   const [payRate, setPayRate] = useState("");
+  const [editingPtoEmployee, setEditingPtoEmployee] = useState<User | null>(null);
+  const [ptoBalance, setPtoBalance] = useState("");
   const [changingRoleEmployee, setChangingRoleEmployee] = useState<User | null>(null);
   const [selectedRole, setSelectedRole] = useState<'employee' | 'manager' | 'admin'>('employee');
   const [isAddEmployeeOpen, setIsAddEmployeeOpen] = useState(false);
@@ -88,6 +90,39 @@ export default function AdminEmployees() {
       toast({
         title: "Success",
         description: "Pay rate updated successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updatePtoBalanceMutation = useMutation({
+    mutationFn: async ({ employeeId, ptoBalance }: { employeeId: string; ptoBalance: string }) => {
+      await apiRequest("PATCH", `/api/employees/${employeeId}/pto`, { ptoBalance });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      setEditingPtoEmployee(null);
+      setPtoBalance("");
+      toast({
+        title: "Success",
+        description: "PTO balance updated successfully.",
       });
     },
     onError: (error: Error) => {
@@ -199,6 +234,20 @@ export default function AdminEmployees() {
       updateRoleMutation.mutate({
         employeeId: changingRoleEmployee.id,
         role: selectedRole,
+      });
+    }
+  };
+
+  const handleEditPtoClick = (employee: User) => {
+    setEditingPtoEmployee(employee);
+    setPtoBalance(employee.ptoBalance || '0');
+  };
+
+  const handleSavePtoBalance = () => {
+    if (editingPtoEmployee && ptoBalance) {
+      updatePtoBalanceMutation.mutate({
+        employeeId: editingPtoEmployee.id,
+        ptoBalance,
       });
     }
   };
@@ -376,6 +425,32 @@ export default function AdminEmployees() {
                         {formatDuration(sickTime)}
                       </div>
                     </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Calendar className="w-4 h-4" />
+                          <span>PTO</span>
+                        </div>
+                        {canViewFinancialData && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditPtoClick(employee.user);
+                            }}
+                            className="h-6 px-2 text-xs"
+                            data-testid={`button-edit-pto-${employee.user.id}`}
+                          >
+                            <Edit className="w-3 h-3 mr-1" />
+                            Edit
+                          </Button>
+                        )}
+                      </div>
+                      <div className="text-lg font-semibold">
+                        {formatDuration(parseFloat(employee.user.ptoBalance || '0'))}
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -425,6 +500,51 @@ export default function AdminEmployees() {
               data-testid="button-save-pay-rate"
             >
               {updatePayRateMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editingPtoEmployee} onOpenChange={(open) => !open && setEditingPtoEmployee(null)}>
+        <DialogContent data-testid="dialog-edit-pto">
+          <DialogHeader>
+            <DialogTitle>Edit PTO Balance</DialogTitle>
+            <DialogDescription>
+              Update PTO balance for {editingPtoEmployee?.firstName} {editingPtoEmployee?.lastName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="ptoBalance">PTO Balance (hours)</Label>
+              <Input
+                id="ptoBalance"
+                type="number"
+                step="0.5"
+                min="0"
+                value={ptoBalance}
+                onChange={(e) => setPtoBalance(e.target.value)}
+                placeholder="0"
+                data-testid="input-pto-balance"
+              />
+              <p className="text-xs text-muted-foreground">
+                Enter the total PTO hours available for this employee
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditingPtoEmployee(null)}
+              data-testid="button-cancel-pto-edit"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSavePtoBalance}
+              disabled={updatePtoBalanceMutation.isPending || !ptoBalance}
+              data-testid="button-save-pto-balance"
+            >
+              {updatePtoBalanceMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>

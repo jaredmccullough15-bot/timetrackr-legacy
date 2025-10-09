@@ -54,13 +54,18 @@ Preferred communication style: Simple, everyday language.
 - `/api/time-entries/*` - Clock in/out and time entry management
 - `/api/employees` - Employee management (admin/manager access)
 - `/api/employees/:id/role` - Role management (admin-only, PATCH)
+- `/api/employees/:id/pto` - PTO balance management (admin/manager, PATCH)
+- `/api/pto-requests` - PTO request creation and management (GET/POST)
+- `/api/pto-requests/:id` - PTO request approval/denial (admin/manager, PATCH)
 - `/api/reports` - Payroll and time reports (admin/manager access)
 
 **Business Logic:**
 - Automatic sick time accrual (1 hour per 30 hours worked)
+- PTO request/approval workflow with balance validation
 - Weekly hour calculations with configurable date ranges
-- Pay rate management per employee
+- Pay rate and PTO balance management per employee
 - Real-time clock status tracking
+- Separate sick time and PTO balances
 
 ### Database Architecture
 
@@ -74,9 +79,16 @@ Preferred communication style: Simple, everyday language.
 1. **users table** - Employee profiles with authentication data
    - Stores email (optional), name (required), profile image, role (employee/manager/admin)
    - 4-digit PIN for authentication (unique, required, plain text)
-   - Pay rate and sick time balance tracking
+   - Pay rate, sick time balance, and PTO balance tracking
    - Timestamps for record keeping
    - Legacy isAdmin field maintained for backward compatibility
+
+3. **ptoRequests table** - PTO request tracking and approval workflow
+   - Foreign key relationship to users (cascade delete)
+   - Start date, end date, and hours requested
+   - Status: pending/approved/denied
+   - Reviewer tracking (who approved/denied and when)
+   - Indexed by userId and status for query performance
 
 2. **timeEntries table** - Clock in/out records
    - Foreign key relationship to users (cascade delete)

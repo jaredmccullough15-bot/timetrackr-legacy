@@ -12,6 +12,7 @@ import EmployeeDashboard from "@/pages/employee-dashboard";
 import AdminOverview from "@/pages/admin/overview";
 import AdminEmployees from "@/pages/admin/employees";
 import AdminReports from "@/pages/admin/reports";
+import AdminMessages from "@/pages/admin/messages";
 import EmployeeDetail from "@/pages/admin/employee-detail";
 import SetupPin from "@/pages/setup-pin";
 import PinLogin from "@/pages/pin-login";
@@ -26,6 +27,7 @@ function Router() {
       <Route path="/admin/employees" component={AdminEmployees} />
       <Route path="/admin/employees/:id" component={EmployeeDetail} />
       <Route path="/admin/reports" component={AdminReports} />
+      <Route path="/admin/messages" component={AdminMessages} />
       <Route path="/dashboard" component={EmployeeDashboard} />
       <Route component={NotFound} />
     </Switch>

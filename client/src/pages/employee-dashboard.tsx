@@ -6,11 +6,14 @@ import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { StatCard } from "@/components/StatCard";
 import { ClockStatusBadge } from "@/components/ClockStatusBadge";
-import { Clock, DollarSign, Heart, TrendingUp, LogOut } from "lucide-react";
+import { Clock, DollarSign, Heart, TrendingUp, LogOut, Calendar } from "lucide-react";
 import { formatCurrency, formatDateTime, formatDuration, getWeekBounds } from "@/lib/timeUtils";
 import type { TimeEntry } from "@shared/schema";
 
@@ -128,6 +131,60 @@ export default function EmployeeDashboard() {
     },
   });
 
+  // PTO request state and mutation
+  const [isPtoDialogOpen, setIsPtoDialogOpen] = useState(false);
+  const [ptoStartDate, setPtoStartDate] = useState("");
+  const [ptoEndDate, setPtoEndDate] = useState("");
+  const [ptoHours, setPtoHours] = useState("");
+
+  const ptoRequestMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/pto-requests", {
+        startDate: new Date(ptoStartDate).toISOString(),
+        endDate: new Date(ptoEndDate).toISOString(),
+        hours: ptoHours,
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "PTO Request Submitted",
+        description: "Your request has been submitted for review.",
+      });
+      setIsPtoDialogOpen(false);
+      setPtoStartDate("");
+      setPtoEndDate("");
+      setPtoHours("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handlePtoRequest = () => {
+    if (!ptoStartDate || !ptoEndDate || !ptoHours) {
+      toast({
+        title: "Validation Error",
+        description: "Please fill in all fields",
+        variant: "destructive",
+      });
+      return;
+    }
+    const hours = parseFloat(ptoHours);
+    if (isNaN(hours) || hours <= 0) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter a valid number of hours",
+        variant: "destructive",
+      });
+      return;
+    }
+    ptoRequestMutation.mutate();
+  };
+
   if (authLoading || !user) {
     return (
       <div className="min-h-screen bg-background p-8">
@@ -164,6 +221,7 @@ export default function EmployeeDashboard() {
   const overtimePay = overtimeHours * payRate * 1.5;
   const weeklyPay = regularPay + overtimePay;
   const sickTimeBalance = parseFloat(user.sickTimeBalance || '0');
+  const ptoBalance = parseFloat(user.ptoBalance || '0');
   const hasOvertime = weeklyHours > 40;
 
   const initials = `${user.firstName?.[0] || ''}${user.lastName?.[0] || ''}`.toUpperCase() || 'U';
@@ -264,7 +322,7 @@ export default function EmployeeDashboard() {
           </CardContent>
         </Card>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard
             title="Weekly Hours"
             value={formatDuration(weeklyHours)}
@@ -289,7 +347,87 @@ export default function EmployeeDashboard() {
             iconColor="text-chart-4"
             testId="stat-sick-time"
           />
+          <StatCard
+            title="PTO"
+            value={formatDuration(ptoBalance)}
+            icon={Calendar}
+            description="Available balance"
+            iconColor="text-chart-1"
+            testId="stat-pto"
+          />
         </div>
+
+        <Dialog open={isPtoDialogOpen} onOpenChange={setIsPtoDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="w-full" variant="outline" data-testid="button-request-pto">
+              <Calendar className="w-4 h-4 mr-2" />
+              Request PTO
+            </Button>
+          </DialogTrigger>
+          <DialogContent data-testid="dialog-pto-request">
+            <DialogHeader>
+              <DialogTitle>Request Paid Time Off</DialogTitle>
+              <DialogDescription>
+                Submit a PTO request for approval. You have {formatDuration(ptoBalance)} available.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="start-date">Start Date</Label>
+                <Input
+                  id="start-date"
+                  type="date"
+                  value={ptoStartDate}
+                  onChange={(e) => setPtoStartDate(e.target.value)}
+                  data-testid="input-pto-start-date"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="end-date">End Date</Label>
+                <Input
+                  id="end-date"
+                  type="date"
+                  value={ptoEndDate}
+                  onChange={(e) => setPtoEndDate(e.target.value)}
+                  data-testid="input-pto-end-date"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="hours">Hours Requested</Label>
+                <Input
+                  id="hours"
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  max={ptoBalance}
+                  placeholder="e.g., 8 or 16"
+                  value={ptoHours}
+                  onChange={(e) => setPtoHours(e.target.value)}
+                  data-testid="input-pto-hours"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Cannot exceed your available balance ({formatDuration(ptoBalance)})
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setIsPtoDialogOpen(false)}
+                data-testid="button-cancel-pto"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handlePtoRequest}
+                disabled={ptoRequestMutation.isPending}
+                data-testid="button-submit-pto"
+              >
+                {ptoRequestMutation.isPending ? "Submitting..." : "Submit Request"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {entriesLoading ? (
           <Card>

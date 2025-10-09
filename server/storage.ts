@@ -1,6 +1,7 @@
 import {
   users,
   timeEntries,
+  ptoRequests,
   type User,
   type UpsertUser,
   type TimeEntry,
@@ -8,6 +9,8 @@ import {
   type UpdateEmployee,
   type CreateTimeEntry,
   type UpdateTimeEntry,
+  type PtoRequest,
+  type CreatePtoRequest,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, isNull, not, desc } from "drizzle-orm";
@@ -25,6 +28,7 @@ export interface IStorage {
   updateEmployeePayRate(id: string, payRate: string): Promise<User>;
   updateUserSickTime(id: string, sickTimeBalance: string): Promise<User>;
   updateUserRole(id: string, role: 'employee' | 'manager' | 'admin'): Promise<User>;
+  updateEmployee(id: string, updates: { payRate?: string; ptoBalance?: string }): Promise<User>;
   
   // Time entry operations
   getUserTimeEntries(userId: string): Promise<TimeEntry[]>;
@@ -34,6 +38,13 @@ export interface IStorage {
   updateTimeEntry(id: number, updates: Partial<TimeEntry>): Promise<TimeEntry>;
   deleteTimeEntry(id: number): Promise<void>;
   getTimeEntry(id: number): Promise<TimeEntry | undefined>;
+  
+  // PTO request operations
+  createPtoRequest(request: { userId: string; startDate: Date; endDate: Date; hours: string; status: 'pending' | 'approved' | 'denied' }): Promise<PtoRequest>;
+  getAllPtoRequests(): Promise<PtoRequest[]>;
+  getUserPtoRequests(userId: string): Promise<PtoRequest[]>;
+  getPtoRequest(id: number): Promise<PtoRequest | undefined>;
+  updatePtoRequest(id: number, updates: { status?: 'pending' | 'approved' | 'denied'; reviewedBy?: string; reviewedAt?: Date }): Promise<PtoRequest>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -261,6 +272,68 @@ export class DatabaseStorage implements IStorage {
       .from(timeEntries)
       .where(eq(timeEntries.id, id));
     return entry;
+  }
+
+  // General employee update method
+  async updateEmployee(id: string, updates: { payRate?: string; ptoBalance?: string }): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set(updates)
+      .where(eq(users.id, id))
+      .returning();
+    
+    if (!user) {
+      throw new Error("User not found");
+    }
+    
+    return user;
+  }
+
+  // PTO request operations
+  async createPtoRequest(request: { userId: string; startDate: Date; endDate: Date; hours: string; status: 'pending' | 'approved' | 'denied' }): Promise<PtoRequest> {
+    const [newRequest] = await db
+      .insert(ptoRequests)
+      .values(request)
+      .returning();
+    
+    return newRequest;
+  }
+
+  async getAllPtoRequests(): Promise<PtoRequest[]> {
+    return await db
+      .select()
+      .from(ptoRequests)
+      .orderBy(desc(ptoRequests.createdAt));
+  }
+
+  async getUserPtoRequests(userId: string): Promise<PtoRequest[]> {
+    return await db
+      .select()
+      .from(ptoRequests)
+      .where(eq(ptoRequests.userId, userId))
+      .orderBy(desc(ptoRequests.createdAt));
+  }
+
+  async getPtoRequest(id: number): Promise<PtoRequest | undefined> {
+    const [request] = await db
+      .select()
+      .from(ptoRequests)
+      .where(eq(ptoRequests.id, id));
+    return request;
+  }
+
+  async updatePtoRequest(id: number, updates: { status?: 'pending' | 'approved' | 'denied'; reviewedBy?: string; reviewedAt?: Date }): Promise<PtoRequest> {
+    const [request] = await db
+      .update(ptoRequests)
+      .set(updates)
+      .where(eq(ptoRequests.id, id))
+      .returning();
+    
+    if (!request) {
+      throw new Error("PTO request not found");
+    }
+    
+    return request;
   }
 }
 

@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, FileText, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, FileText, MessageSquare, LogOut } from "lucide-react";
 import { useLocation } from "wouter";
 import {
   Sidebar,
@@ -28,6 +28,12 @@ const menuItems = [
     url: "/admin/employees",
     icon: Users,
     testId: "nav-employees",
+  },
+  {
+    title: "Messages",
+    url: "/admin/messages",
+    icon: MessageSquare,
+    testId: "nav-messages",
   },
   {
     title: "Reports",
