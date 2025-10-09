@@ -21,6 +21,7 @@ export interface IStorage {
   getAllUsers(): Promise<User[]>;
   updateEmployeePayRate(id: string, payRate: string): Promise<User>;
   updateUserSickTime(id: string, sickTimeBalance: string): Promise<User>;
+  updateUserRole(id: string, role: 'employee' | 'manager' | 'admin'): Promise<User>;
   
   // Time entry operations
   getUserTimeEntries(userId: string): Promise<TimeEntry[]>;
@@ -77,6 +78,20 @@ export class DatabaseStorage implements IStorage {
     const [user] = await db
       .update(users)
       .set({ sickTimeBalance, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    
+    if (!user) {
+      throw new Error("User not found");
+    }
+    
+    return user;
+  }
+
+  async updateUserRole(id: string, role: 'employee' | 'manager' | 'admin'): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ role, updatedAt: new Date() })
       .where(eq(users.id, id))
       .returning();
     

@@ -184,6 +184,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update employee role (admin only)
+  app.patch('/api/employees/:id/role', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+
+      if (!isAdmin(currentUser)) {
+        return res.status(403).json({ message: "Forbidden: Admin access required" });
+      }
+
+      const employeeId = req.params.id;
+      const { role } = req.body;
+
+      // Validate role
+      if (!role || !['employee', 'manager', 'admin'].includes(role)) {
+        return res.status(400).json({ message: "Invalid role. Must be 'employee', 'manager', or 'admin'" });
+      }
+
+      // Prevent admin from changing their own role
+      if (employeeId === userId) {
+        return res.status(400).json({ message: "Cannot change your own role" });
+      }
+
+      const updatedUser = await storage.updateUserRole(employeeId, role);
+      
+      if (!updatedUser) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+
+      res.json(updatedUser);
+    } catch (error: any) {
+      console.error("Error updating employee role:", error);
+      res.status(500).json({ message: error.message || "Failed to update employee role" });
+    }
+  });
+
   app.patch('/api/employees/:id/pay-rate', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
