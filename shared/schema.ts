@@ -28,16 +28,16 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
-// User storage table - Extended for Replit Auth and employee management
+// User storage table - Extended for employee management with PIN authentication
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: varchar("email").unique(),
-  firstName: varchar("first_name"),
-  lastName: varchar("last_name"),
+  email: varchar("email").unique(), // Optional - only used for admin notifications
+  firstName: varchar("first_name").notNull(),
+  lastName: varchar("last_name").notNull(),
   profileImageUrl: varchar("profile_image_url"),
   role: userRoleEnum("role").default('employee').notNull(),
   isAdmin: boolean("is_admin").default(false).notNull(), // Deprecated - kept for backwards compatibility during migration
-  pinHash: varchar("pin_hash"), // Hashed 4-digit PIN for authentication
+  pin: varchar("pin", { length: 4 }).unique().notNull(), // 4-digit PIN for clock in/out (unique identifier)
   payRate: numeric("pay_rate", { precision: 10, scale: 2 }).default('0').notNull(),
   sickTimeBalance: numeric("sick_time_balance", { precision: 10, scale: 2 }).default('0').notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -111,12 +111,15 @@ export const updateTimeEntrySchema = z.object({
   clockOut: z.string().datetime().optional().nullable(),
 });
 
-export const setupPinSchema = z.object({
+export const createEmployeeSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
   pin: z.string().regex(/^\d{4}$/, "PIN must be exactly 4 digits"),
+  payRate: z.string().regex(/^\d+(\.\d{1,2})?$/, "Invalid pay rate format").default('0'),
+  email: z.string().email("Invalid email address").optional().or(z.literal('')),
 });
 
 export const pinLoginSchema = z.object({
-  email: z.string().email("Invalid email address"),
   pin: z.string().regex(/^\d{4}$/, "PIN must be exactly 4 digits"),
 });
 

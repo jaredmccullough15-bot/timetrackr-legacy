@@ -11,7 +11,7 @@ import {
   reportQuerySchema,
   createTimeEntrySchema,
   updateTimeEntrySchema,
-  setupPinSchema,
+  createEmployeeSchema,
   pinLoginSchema
 } from "@shared/schema";
 import { startOfWeek, endOfWeek } from "date-fns";
@@ -33,45 +33,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Setup PIN for authenticated user
-  app.post('/api/auth/setup-pin', isAuthenticated, async (req: any, res) => {
-    try {
-      const userId = req.user.claims.sub;
-      const validatedData = setupPinSchema.parse(req.body);
-      
-      // Hash the PIN
-      const pinHash = await bcrypt.hash(validatedData.pin, 10);
-      
-      // Update user with PIN hash
-      const updatedUser = await storage.updateUserPin(userId, pinHash);
-      
-      res.json({ message: "PIN setup successful", user: updatedUser });
-    } catch (error: any) {
-      console.error("Error setting up PIN:", error);
-      res.status(400).json({ message: error.message || "Failed to setup PIN" });
-    }
-  });
-
-  // Login with PIN
+  // Login with PIN only (no email required)
   app.post('/api/auth/pin-login', async (req: any, res) => {
     try {
       const validatedData = pinLoginSchema.parse(req.body);
       
-      // Find user by email
-      const user = await storage.getUserByEmail(validatedData.email);
+      // Find user by PIN
+      const user = await storage.getUserByPin(validatedData.pin);
       if (!user) {
-        return res.status(401).json({ message: "Invalid email or PIN" });
-      }
-      
-      // Check if user has set up a PIN
-      if (!user.pinHash) {
-        return res.status(400).json({ message: "PIN not set up. Please log in with Replit Auth first." });
-      }
-      
-      // Verify PIN
-      const isPinValid = await bcrypt.compare(validatedData.pin, user.pinHash);
-      if (!isPinValid) {
-        return res.status(401).json({ message: "Invalid email or PIN" });
+        return res.status(401).json({ message: "Invalid PIN" });
       }
       
       // Create session for the user
@@ -239,6 +209,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching employee list:", error);
       res.status(500).json({ message: "Failed to fetch employee list" });
+    }
+  });
+
+  // Create new employee (admin only)
+  app.post('/api/employees', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+
+      if (!isAdmin(currentUser)) {
+        return res.status(403).json({ message: "Forbidden: Admin access required" });
+      }
+
+      const validatedData = createEmployeeSchema.parse(req.body);
+      
+      // Check if PIN is already in use
+      const existingUser = await storage.getUserByPin(validatedData.pin);
+      if (existingUser) {
+        return res.status(400).json({ message: "PIN already in use. Please choose a different PIN." });
+      }
+
+      // Create the employee
+      const newEmployee = await storage.createEmployee({
+        firstName: validatedData.firstName,
+        lastName: validatedData.lastName,
+        pin: validatedData.pin,
+        payRate: validatedData.payRate || '0',
+        email: validatedData.email || null,
+      });
+
+      res.json(newEmployee);
+    } catch (error: any) {
+      console.error("Error creating employee:", error);
+      res.status(400).json({ message: error.message || "Failed to create employee" });
     }
   });
 

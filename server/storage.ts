@@ -13,11 +13,12 @@ import { db } from "./db";
 import { eq, and, gte, lte, isNull, not, desc } from "drizzle-orm";
 
 export interface IStorage {
-  // User operations (Required for Replit Auth)
+  // User operations
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByPin(pin: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
-  updateUserPin(id: string, pinHash: string): Promise<User>;
+  createEmployee(employee: { firstName: string; lastName: string; pin: string; payRate: string; email?: string | null }): Promise<User>;
   
   // Employee operations
   getAllUsers(): Promise<User[]>;
@@ -47,30 +48,74 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async getUserByPin(pin: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.pin, pin));
+    return user;
+  }
+
   async upsertUser(userData: UpsertUser): Promise<User> {
+    // Check if user exists
+    const existingUser = await this.getUser(userData.id!);
+    
+    if (existingUser) {
+      // Update existing user (keep their PIN)
+      const [user] = await db
+        .update(users)
+        .set({
+          email: userData.email,
+          firstName: userData.firstName!,
+          lastName: userData.lastName!,
+          profileImageUrl: userData.profileImageUrl,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userData.id!))
+        .returning();
+      return user;
+    }
+    
+    // Generate a unique 4-digit PIN for new admin users (via Replit Auth)
+    let pin = '';
+    let isUnique = false;
+    while (!isUnique) {
+      pin = Math.floor(1000 + Math.random() * 9000).toString();
+      const existingPinUser = await this.getUserByPin(pin);
+      if (!existingPinUser) {
+        isUnique = true;
+      }
+    }
+    
+    // Create new user with auto-generated PIN (for Replit Auth admins)
     const [user] = await db
       .insert(users)
-      .values(userData)
-      .onConflictDoUpdate({
-        target: users.id,
-        set: {
-          ...userData,
-          updatedAt: new Date(),
-        },
+      .values({
+        ...userData,
+        firstName: userData.firstName!,
+        lastName: userData.lastName!,
+        pin,
+        role: 'admin', // Replit Auth users are admins
+        payRate: '0',
+        sickTimeBalance: '0',
       })
       .returning();
     return user;
   }
 
-  async updateUserPin(id: string, pinHash: string): Promise<User> {
+  async createEmployee(employee: { firstName: string; lastName: string; pin: string; payRate: string; email?: string | null }): Promise<User> {
     const [user] = await db
-      .update(users)
-      .set({ pinHash, updatedAt: new Date() })
-      .where(eq(users.id, id))
+      .insert(users)
+      .values({
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        pin: employee.pin,
+        payRate: employee.payRate,
+        email: employee.email || null,
+        role: 'employee',
+        sickTimeBalance: '0',
+      })
       .returning();
     
     if (!user) {
-      throw new Error("User not found");
+      throw new Error("Failed to create employee");
     }
     
     return user;
