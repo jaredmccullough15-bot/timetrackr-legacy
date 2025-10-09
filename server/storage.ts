@@ -15,7 +15,9 @@ import { eq, and, gte, lte, isNull, not, desc } from "drizzle-orm";
 export interface IStorage {
   // User operations (Required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
+  updateUserPin(id: string, pinHash: string): Promise<User>;
   
   // Employee operations
   getAllUsers(): Promise<User[]>;
@@ -40,6 +42,11 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
   async upsertUser(userData: UpsertUser): Promise<User> {
     const [user] = await db
       .insert(users)
@@ -52,6 +59,20 @@ export class DatabaseStorage implements IStorage {
         },
       })
       .returning();
+    return user;
+  }
+
+  async updateUserPin(id: string, pinHash: string): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({ pinHash, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    
+    if (!user) {
+      throw new Error("User not found");
+    }
+    
     return user;
   }
 

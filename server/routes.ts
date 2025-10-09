@@ -10,9 +10,12 @@ import {
   updateEmployeeSchema,
   reportQuerySchema,
   createTimeEntrySchema,
-  updateTimeEntrySchema
+  updateTimeEntrySchema,
+  setupPinSchema,
+  pinLoginSchema
 } from "@shared/schema";
 import { startOfWeek, endOfWeek } from "date-fns";
+import bcrypt from "bcryptjs";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup Replit Auth middleware
@@ -27,6 +30,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  // Setup PIN for authenticated user
+  app.post('/api/auth/setup-pin', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const validatedData = setupPinSchema.parse(req.body);
+      
+      // Hash the PIN
+      const pinHash = await bcrypt.hash(validatedData.pin, 10);
+      
+      // Update user with PIN hash
+      const updatedUser = await storage.updateUserPin(userId, pinHash);
+      
+      res.json({ message: "PIN setup successful", user: updatedUser });
+    } catch (error: any) {
+      console.error("Error setting up PIN:", error);
+      res.status(400).json({ message: error.message || "Failed to setup PIN" });
+    }
+  });
+
+  // Login with PIN
+  app.post('/api/auth/pin-login', async (req: any, res) => {
+    try {
+      const validatedData = pinLoginSchema.parse(req.body);
+      
+      // Find user by email
+      const user = await storage.getUserByEmail(validatedData.email);
+      if (!user) {
+        return res.status(401).json({ message: "Invalid email or PIN" });
+      }
+      
+      // Check if user has set up a PIN
+      if (!user.pinHash) {
+        return res.status(400).json({ message: "PIN not set up. Please log in with Replit Auth first." });
+      }
+      
+      // Verify PIN
+      const isPinValid = await bcrypt.compare(validatedData.pin, user.pinHash);
+      if (!isPinValid) {
+        return res.status(401).json({ message: "Invalid email or PIN" });
+      }
+      
+      // Create session for the user
+      req.login({ claims: { sub: user.id } }, (err: any) => {
+        if (err) {
+          console.error("Error creating session:", err);
+          return res.status(500).json({ message: "Failed to create session" });
+        }
+        res.json({ message: "Login successful", user });
+      });
+    } catch (error: any) {
+      console.error("Error during PIN login:", error);
+      res.status(400).json({ message: error.message || "Failed to login" });
     }
   });
 

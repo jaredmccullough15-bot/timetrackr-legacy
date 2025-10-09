@@ -37,6 +37,7 @@ export const users = pgTable("users", {
   profileImageUrl: varchar("profile_image_url"),
   role: userRoleEnum("role").default('employee').notNull(),
   isAdmin: boolean("is_admin").default(false).notNull(), // Deprecated - kept for backwards compatibility during migration
+  pinHash: varchar("pin_hash"), // Hashed 4-digit PIN for authentication
   payRate: numeric("pay_rate", { precision: 10, scale: 2 }).default('0').notNull(),
   sickTimeBalance: numeric("sick_time_balance", { precision: 10, scale: 2 }).default('0').notNull(),
   createdAt: timestamp("created_at").defaultNow(),
@@ -108,6 +109,15 @@ export const createTimeEntrySchema = z.object({
 export const updateTimeEntrySchema = z.object({
   clockIn: z.string().datetime().optional(),
   clockOut: z.string().datetime().optional().nullable(),
+});
+
+export const setupPinSchema = z.object({
+  pin: z.string().regex(/^\d{4}$/, "PIN must be exactly 4 digits"),
+});
+
+export const pinLoginSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  pin: z.string().regex(/^\d{4}$/, "PIN must be exactly 4 digits"),
 });
 
 // TypeScript types
