@@ -1,4 +1,4 @@
-import { useRef, useState, KeyboardEvent, ClipboardEvent } from "react";
+import { useRef, useEffect, KeyboardEvent, ClipboardEvent } from "react";
 import { Input } from "@/components/ui/input";
 
 interface PinInputProps {
@@ -10,16 +10,22 @@ interface PinInputProps {
 
 export function PinInput({ length = 4, value, onChange, onComplete }: PinInputProps) {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  const [pins, setPins] = useState<string[]>(Array(length).fill(""));
+  
+  const pins = Array.from({ length }, (_, i) => value[i] || "");
+
+  useEffect(() => {
+    if (value === "") {
+      inputRefs.current[0]?.focus();
+    }
+  }, [value]);
 
   const handleChange = (index: number, newValue: string) => {
     if (!/^\d*$/.test(newValue)) return;
 
     const newPins = [...pins];
     newPins[index] = newValue.slice(-1);
-    setPins(newPins);
 
-    const pinString = newPins.join("");
+    const pinString = newPins.join("").replace(/\s/g, "");
     onChange(pinString);
 
     if (newValue && index < length - 1) {
@@ -32,8 +38,19 @@ export function PinInput({ length = 4, value, onChange, onComplete }: PinInputPr
   };
 
   const handleKeyDown = (index: number, e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Backspace" && !pins[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
+    if (e.key === "Backspace") {
+      if (!pins[index] && index > 0) {
+        const newPins = [...pins];
+        newPins[index - 1] = "";
+        const pinString = newPins.join("").replace(/\s/g, "");
+        onChange(pinString);
+        inputRefs.current[index - 1]?.focus();
+      } else {
+        const newPins = [...pins];
+        newPins[index] = "";
+        const pinString = newPins.join("").replace(/\s/g, "");
+        onChange(pinString);
+      }
     }
   };
 
@@ -42,13 +59,12 @@ export function PinInput({ length = 4, value, onChange, onComplete }: PinInputPr
     const pastedData = e.clipboardData.getData("text").slice(0, length);
     if (!/^\d+$/.test(pastedData)) return;
 
-    const newPins = [...pins];
+    const newPins = Array(length).fill("");
     pastedData.split("").forEach((char, i) => {
       if (i < length) newPins[i] = char;
     });
-    setPins(newPins);
 
-    const pinString = newPins.join("");
+    const pinString = newPins.join("").replace(/\s/g, "");
     onChange(pinString);
 
     if (pastedData.length === length && onComplete) {
