@@ -29,7 +29,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { ClockStatusBadge } from "@/components/ClockStatusBadge";
-import { Users, DollarSign, Heart, Clock, Edit, Shield } from "lucide-react";
+import { Users, DollarSign, Heart, Clock, Edit, Shield, Plus } from "lucide-react";
 import { formatCurrency, formatDuration } from "@/lib/timeUtils";
 import type { User, TimeEntry } from "@shared/schema";
 
@@ -49,6 +49,14 @@ export default function AdminEmployees() {
   const [payRate, setPayRate] = useState("");
   const [changingRoleEmployee, setChangingRoleEmployee] = useState<User | null>(null);
   const [selectedRole, setSelectedRole] = useState<'employee' | 'manager' | 'admin'>('employee');
+  const [isAddEmployeeOpen, setIsAddEmployeeOpen] = useState(false);
+  const [newEmployee, setNewEmployee] = useState({
+    firstName: '',
+    lastName: '',
+    pin: '',
+    payRate: '',
+    email: '',
+  });
 
   useEffect(() => {
     if (!authLoading && (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'manager'))) {
@@ -134,6 +142,39 @@ export default function AdminEmployees() {
     },
   });
 
+  const createEmployeeMutation = useMutation({
+    mutationFn: async (employeeData: typeof newEmployee) => {
+      await apiRequest("POST", "/api/employees", employeeData);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      setIsAddEmployeeOpen(false);
+      setNewEmployee({ firstName: '', lastName: '', pin: '', payRate: '', email: '' });
+      toast({
+        title: "Success",
+        description: "Employee created successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create employee.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleEditClick = (employee: User) => {
     setEditingEmployee(employee);
     setPayRate(employee.payRate || '0');
@@ -162,6 +203,28 @@ export default function AdminEmployees() {
     }
   };
 
+  const handleCreateEmployee = () => {
+    if (!newEmployee.firstName || !newEmployee.lastName || !newEmployee.pin) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!/^\d{4}$/.test(newEmployee.pin)) {
+      toast({
+        title: "Error",
+        description: "PIN must be exactly 4 digits.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    createEmployeeMutation.mutate(newEmployee);
+  };
+
   if (authLoading || !currentUser || employeesLoading) {
     return (
       <div className="p-8 space-y-8">
@@ -176,11 +239,19 @@ export default function AdminEmployees() {
 
   return (
     <div className="p-8 space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Employees</h1>
-        <p className="text-muted-foreground mt-1">
-          Manage employee information and pay rates
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Employees</h1>
+          <p className="text-muted-foreground mt-1">
+            Manage employee information and pay rates
+          </p>
+        </div>
+        {currentUser.role === 'admin' && (
+          <Button onClick={() => setIsAddEmployeeOpen(true)} data-testid="button-add-employee">
+            <Plus className="w-4 h-4 mr-2" />
+            Add Employee
+          </Button>
+        )}
       </div>
 
       {!employees || employees.length === 0 ? (
@@ -401,6 +472,106 @@ export default function AdminEmployees() {
               data-testid="button-save-role"
             >
               {updateRoleMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAddEmployeeOpen} onOpenChange={setIsAddEmployeeOpen}>
+        <DialogContent data-testid="dialog-add-employee">
+          <DialogHeader>
+            <DialogTitle>Add New Employee</DialogTitle>
+            <DialogDescription>
+              Create a new employee account with an assigned PIN
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="firstName">First Name *</Label>
+                <Input
+                  id="firstName"
+                  value={newEmployee.firstName}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, firstName: e.target.value })}
+                  placeholder="John"
+                  data-testid="input-first-name"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lastName">Last Name *</Label>
+                <Input
+                  id="lastName"
+                  value={newEmployee.lastName}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, lastName: e.target.value })}
+                  placeholder="Doe"
+                  data-testid="input-last-name"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="pin">4-Digit PIN *</Label>
+              <Input
+                id="pin"
+                type="text"
+                maxLength={4}
+                value={newEmployee.pin}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\D/g, '');
+                  setNewEmployee({ ...newEmployee, pin: value });
+                }}
+                placeholder="1234"
+                data-testid="input-pin"
+              />
+              <p className="text-sm text-muted-foreground">
+                This PIN will be used by the employee to clock in and out
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="newPayRate">Pay Rate (per hour)</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
+                <Input
+                  id="newPayRate"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={newEmployee.payRate}
+                  onChange={(e) => setNewEmployee({ ...newEmployee, payRate: e.target.value })}
+                  className="pl-7"
+                  placeholder="0.00"
+                  data-testid="input-new-pay-rate"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Email (optional)</Label>
+              <Input
+                id="email"
+                type="email"
+                value={newEmployee.email}
+                onChange={(e) => setNewEmployee({ ...newEmployee, email: e.target.value })}
+                placeholder="john.doe@example.com"
+                data-testid="input-email"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsAddEmployeeOpen(false);
+                setNewEmployee({ firstName: '', lastName: '', pin: '', payRate: '', email: '' });
+              }}
+              data-testid="button-cancel-add"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateEmployee}
+              disabled={createEmployeeMutation.isPending}
+              data-testid="button-create-employee"
+            >
+              {createEmployeeMutation.isPending ? "Creating..." : "Create Employee"}
             </Button>
           </DialogFooter>
         </DialogContent>
