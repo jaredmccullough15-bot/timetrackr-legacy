@@ -15,7 +15,7 @@ import { StatCard } from "@/components/StatCard";
 import { ClockStatusBadge } from "@/components/ClockStatusBadge";
 import { Clock, DollarSign, Heart, TrendingUp, LogOut, Calendar } from "lucide-react";
 import { formatCurrency, formatDateTime, formatDuration, getWeekBounds } from "@/lib/timeUtils";
-import type { TimeEntry } from "@shared/schema";
+import type { TimeEntry, PtoRequest } from "@shared/schema";
 
 export default function EmployeeDashboard() {
   const { user, isLoading: authLoading } = useAuth();
@@ -39,6 +39,11 @@ export default function EmployeeDashboard() {
 
   const { data: timeEntries, isLoading: entriesLoading } = useQuery<TimeEntry[]>({
     queryKey: ["/api/time-entries"],
+    enabled: !!user,
+  });
+
+  const { data: ptoRequests, isLoading: ptoRequestsLoading } = useQuery<PtoRequest[]>({
+    queryKey: ["/api/pto-requests"],
     enabled: !!user,
   });
 
@@ -146,6 +151,7 @@ export default function EmployeeDashboard() {
       });
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pto-requests"] });
       toast({
         title: "PTO Request Submitted",
         description: "Your request has been submitted for review.",
@@ -430,6 +436,62 @@ export default function EmployeeDashboard() {
             testId="stat-pto"
           />
         </div>
+
+        {ptoRequestsLoading ? (
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-40" />
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <Skeleton className="h-16 w-full" />
+              </div>
+            </CardContent>
+          </Card>
+        ) : ptoRequests && ptoRequests.length > 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>PTO Requests</CardTitle>
+              <CardDescription>Your time off requests and approval status</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {ptoRequests.slice().reverse().map((request) => {
+                  const startDate = new Date(request.startDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+                  const endDate = new Date(request.endDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+                  
+                  const statusColor = 
+                    request.status === 'approved' ? 'text-green-600 dark:text-green-400' :
+                    request.status === 'denied' ? 'text-red-600 dark:text-red-400' :
+                    'text-yellow-600 dark:text-yellow-400';
+                  
+                  const statusText = request.status.charAt(0).toUpperCase() + request.status.slice(1);
+                  
+                  return (
+                    <div
+                      key={request.id}
+                      className="flex justify-between items-center p-4 rounded-md border"
+                      data-testid={`pto-request-${request.id}`}
+                    >
+                      <div className="flex-1">
+                        <div className="text-sm text-muted-foreground mb-1">Date Requested</div>
+                        <div className="font-medium" data-testid={`pto-dates-${request.id}`}>
+                          {startDate} - {endDate}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm text-muted-foreground mb-1">Status</div>
+                        <div className={`font-semibold ${statusColor}`} data-testid={`pto-status-${request.id}`}>
+                          {statusText}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
 
         {entriesLoading ? (
           <Card>
