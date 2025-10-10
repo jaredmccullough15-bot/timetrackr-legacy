@@ -26,10 +26,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { ClockStatusBadge } from "@/components/ClockStatusBadge";
-import { Users, DollarSign, Heart, Clock, Edit, Shield, Plus, Calendar } from "lucide-react";
+import { Users, DollarSign, Heart, Clock, Edit, Shield, Plus, Calendar, Trash2 } from "lucide-react";
 import { formatCurrency, formatDuration } from "@/lib/timeUtils";
 import type { User, TimeEntry } from "@shared/schema";
 
@@ -52,6 +62,7 @@ export default function AdminEmployees() {
   const [changingRoleEmployee, setChangingRoleEmployee] = useState<User | null>(null);
   const [selectedRole, setSelectedRole] = useState<'employee' | 'manager' | 'admin'>('employee');
   const [isAddEmployeeOpen, setIsAddEmployeeOpen] = useState(false);
+  const [deletingEmployee, setDeletingEmployee] = useState<User | null>(null);
   const [newEmployee, setNewEmployee] = useState({
     firstName: '',
     lastName: '',
@@ -205,6 +216,38 @@ export default function AdminEmployees() {
       toast({
         title: "Error",
         description: error.message || "Failed to create employee.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteEmployeeMutation = useMutation({
+    mutationFn: async (employeeId: string) => {
+      await apiRequest("DELETE", `/api/employees/${employeeId}`, undefined);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      setDeletingEmployee(null);
+      toast({
+        title: "Success",
+        description: "Employee deleted successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      if (isUnauthorizedError(error)) {
+        toast({
+          title: "Unauthorized",
+          description: "You are logged out. Logging in again...",
+          variant: "destructive",
+        });
+        setTimeout(() => {
+          window.location.href = "/api/login";
+        }, 500);
+        return;
+      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete employee.",
         variant: "destructive",
       });
     },
@@ -378,6 +421,19 @@ export default function AdminEmployees() {
                           data-testid={`button-edit-${employee.user.id}`}
                         >
                           <Edit className="w-4 h-4" />
+                        </Button>
+                      )}
+                      {currentUser.role === 'admin' && employee.user.id !== currentUser.id && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDeletingEmployee(employee.user);
+                          }}
+                          data-testid={`button-delete-${employee.user.id}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </Button>
                       )}
                     </div>
@@ -696,6 +752,28 @@ export default function AdminEmployees() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deletingEmployee} onOpenChange={(open) => !open && setDeletingEmployee(null)}>
+        <AlertDialogContent data-testid="dialog-delete-employee">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Employee?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {deletingEmployee?.firstName} {deletingEmployee?.lastName}? 
+              This will permanently delete their account, all time entries, and PTO requests. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deletingEmployee && deleteEmployeeMutation.mutate(deletingEmployee.id)}
+              data-testid="button-confirm-delete"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteEmployeeMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
