@@ -27,7 +27,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { TimeEntryModal } from "@/components/TimeEntryModal";
-import { ArrowLeft, Plus, Edit, Trash2, DollarSign, Heart, Clock, Shield } from "lucide-react";
+import { ArrowLeft, Plus, Edit, Trash2, DollarSign, Heart, Clock, Shield, UserX } from "lucide-react";
 import { formatDuration, formatDateTime, formatCurrency } from "@/lib/timeUtils";
 import type { TimeEntry } from "@shared/schema";
 import { Input } from "@/components/ui/input";
@@ -75,6 +75,7 @@ export default function EmployeeDetail() {
   const [deletingEntry, setDeletingEntry] = useState<TimeEntry | null>(null);
   const [showRoleDialog, setShowRoleDialog] = useState(false);
   const [selectedRole, setSelectedRole] = useState<'employee' | 'manager' | 'admin'>('employee');
+  const [showDeleteEmployeeDialog, setShowDeleteEmployeeDialog] = useState(false);
 
   const employeeId = params.id;
 
@@ -133,6 +134,27 @@ export default function EmployeeDetail() {
       toast({
         title: "Error",
         description: error.message || "Failed to update employee role.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteEmployeeMutation = useMutation({
+    mutationFn: async (employeeId: string) => {
+      await apiRequest("DELETE", `/api/employees/${employeeId}`, undefined);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      toast({
+        title: "Success",
+        description: "Employee deleted successfully.",
+      });
+      navigate("/admin/employees");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete employee.",
         variant: "destructive",
       });
     },
@@ -210,7 +232,7 @@ export default function EmployeeDetail() {
           </CardHeader>
           <CardContent className="space-y-4">
             {canViewFinancialData && employee.user.id !== currentUser?.id && (
-              <div className="mb-4">
+              <div className="mb-4 space-y-2">
                 <Button
                   variant="outline"
                   className="w-full"
@@ -220,6 +242,17 @@ export default function EmployeeDetail() {
                   <Shield className="w-4 h-4 mr-2" />
                   Change Role
                 </Button>
+                {currentUser?.role === 'admin' && (
+                  <Button
+                    variant="outline"
+                    className="w-full text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                    onClick={() => setShowDeleteEmployeeDialog(true)}
+                    data-testid="button-delete-employee"
+                  >
+                    <UserX className="w-4 h-4 mr-2" />
+                    Delete Employee
+                  </Button>
+                )}
               </div>
             )}
             {canViewFinancialData && (
@@ -390,6 +423,28 @@ export default function EmployeeDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={showDeleteEmployeeDialog} onOpenChange={setShowDeleteEmployeeDialog}>
+        <AlertDialogContent data-testid="dialog-delete-employee-detail">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Employee?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {employee.user.firstName} {employee.user.lastName}? 
+              This will permanently delete their account, all time entries, and PTO requests. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-employee">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => employee && deleteEmployeeMutation.mutate(employee.user.id)}
+              data-testid="button-confirm-delete-employee"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteEmployeeMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
