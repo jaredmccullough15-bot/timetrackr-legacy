@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Calendar, Check, X, Inbox } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Calendar, Check, X, Inbox, Users } from "lucide-react";
 import { formatDuration } from "@/lib/timeUtils";
 import type { PtoRequest, User } from "@shared/schema";
 
@@ -14,6 +15,16 @@ type PtoRequestWithUser = PtoRequest & {
   user?: User;
   reviewer?: User;
 };
+
+// Helper function to check if two date ranges overlap
+function datesOverlap(start1: string | Date, end1: string | Date, start2: string | Date, end2: string | Date): boolean {
+  const s1 = new Date(start1);
+  const e1 = new Date(end1);
+  const s2 = new Date(start2);
+  const e2 = new Date(end2);
+  
+  return s1 <= e2 && s2 <= e1;
+}
 
 export default function AdminMessages() {
   const { user } = useAuth();
@@ -24,7 +35,7 @@ export default function AdminMessages() {
     enabled: !!user,
   });
 
-  const { data: allUsers } = useQuery<User[]>({
+  const { data: employeesData } = useQuery<Array<{ user: User; entries: any[]; weeklyHours: number; isClockedIn: boolean }>>({
     queryKey: ["/api/employees"],
     enabled: !!user,
   });
@@ -63,7 +74,7 @@ export default function AdminMessages() {
   }
 
   // Create a map of users for quick lookup
-  const userMap = new Map(allUsers?.map(u => [u.id, u]) || []);
+  const userMap = new Map(employeesData?.map(e => [e.user.id, e.user]) || []);
 
   // Enrich PTO requests with user data
   const enrichedRequests: PtoRequestWithUser[] = ptoRequests?.map(req => ({
@@ -136,6 +147,44 @@ export default function AdminMessages() {
                           </p>
                         </div>
                       </div>
+                      
+                      {(() => {
+                        // Find conflicting approved PTO requests
+                        const allConflicts = enrichedRequests.filter(r => 
+                          r.status === "approved" && 
+                          r.userId !== request.userId &&
+                          datesOverlap(request.startDate, request.endDate, r.startDate, r.endDate)
+                        );
+                        
+                        // Deduplicate by composite key (userId + dates) to ensure each unique conflict is shown only once
+                        const uniqueConflicts = Array.from(
+                          new Map(allConflicts.map(c => {
+                            const key = `${c.userId}-${c.startDate}-${c.endDate}`;
+                            return [key, c];
+                          })).values()
+                        );
+                        
+                        if (uniqueConflicts.length > 0) {
+                          return (
+                            <Alert data-testid={`pto-conflicts-${request.id}`}>
+                              <Users className="h-4 w-4" />
+                              <AlertDescription>
+                                <p className="font-medium mb-1">Other employees with approved PTO during this time:</p>
+                                <ul className="list-disc list-inside space-y-1">
+                                  {uniqueConflicts.map(conflict => (
+                                    <li key={conflict.id}>
+                                      {conflict.user?.firstName} {conflict.user?.lastName} 
+                                      {' '}({new Date(conflict.startDate).toLocaleDateString()} - {new Date(conflict.endDate).toLocaleDateString()})
+                                    </li>
+                                  ))}
+                                </ul>
+                              </AlertDescription>
+                            </Alert>
+                          );
+                        }
+                        return null;
+                      })()}
+                      
                       <div className="flex gap-2">
                         <Button
                           variant="default"
