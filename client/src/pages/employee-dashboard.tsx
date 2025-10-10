@@ -474,13 +474,13 @@ export default function EmployeeDashboard() {
                       data-testid={`pto-request-${request.id}`}
                     >
                       <div className="flex-1">
-                        <div className="text-sm text-muted-foreground mb-1">Date Requested</div>
+                        <div className="text-sm text-muted-foreground mb-1" data-testid={`label-date-requested-${request.id}`}>Date Requested</div>
                         <div className="font-medium" data-testid={`pto-dates-${request.id}`}>
                           {startDate} - {endDate}
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm text-muted-foreground mb-1">Status</div>
+                        <div className="text-sm text-muted-foreground mb-1" data-testid={`label-status-${request.id}`}>Status</div>
                         <div className={`font-semibold ${statusColor}`} data-testid={`pto-status-${request.id}`}>
                           {statusText}
                         </div>
