@@ -29,6 +29,7 @@ export interface IStorage {
   updateUserSickTime(id: string, sickTimeBalance: string): Promise<User>;
   updateUserRole(id: string, role: 'employee' | 'manager' | 'admin'): Promise<User>;
   updateEmployee(id: string, updates: { payRate?: string; ptoBalance?: string }): Promise<User>;
+  deleteEmployee(id: string): Promise<void>;
   
   // Time entry operations
   getUserTimeEntries(userId: string): Promise<TimeEntry[]>;
@@ -287,6 +288,10 @@ export class DatabaseStorage implements IStorage {
     }
     
     return user;
+  }
+
+  async deleteEmployee(id: string): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
   }
 
   // PTO request operations
