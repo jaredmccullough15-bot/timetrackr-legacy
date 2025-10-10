@@ -673,6 +673,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete employee - admin only
+  app.delete('/api/employees/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+      const employeeId = req.params.id;
+      
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Forbidden: Admin access required" });
+      }
+      
+      // Prevent self-deletion
+      if (employeeId === userId) {
+        return res.status(400).json({ message: "Cannot delete your own account" });
+      }
+      
+      const employee = await storage.getUser(employeeId);
+      if (!employee) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+      
+      await storage.deleteEmployee(employeeId);
+      
+      res.json({ success: true, message: "Employee deleted successfully" });
+    } catch (error: any) {
+      console.error("Error deleting employee:", error);
+      res.status(400).json({ message: error.message || "Failed to delete employee" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
