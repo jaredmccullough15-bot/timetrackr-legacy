@@ -2,6 +2,8 @@ import {
   users,
   timeEntries,
   ptoRequests,
+  breaks,
+  breakNotifications,
   type User,
   type UpsertUser,
   type TimeEntry,
@@ -11,6 +13,10 @@ import {
   type UpdateTimeEntry,
   type PtoRequest,
   type CreatePtoRequest,
+  type Break,
+  type InsertBreak,
+  type BreakNotification,
+  type InsertBreakNotification,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, isNull, not, desc } from "drizzle-orm";
@@ -46,6 +52,19 @@ export interface IStorage {
   getUserPtoRequests(userId: string): Promise<PtoRequest[]>;
   getPtoRequest(id: number): Promise<PtoRequest | undefined>;
   updatePtoRequest(id: number, updates: { status?: 'pending' | 'approved' | 'denied'; reviewedBy?: string; reviewedAt?: Date }): Promise<PtoRequest>;
+  
+  // Break operations
+  createBreak(breakData: { userId: string; startTime: Date }): Promise<Break>;
+  getActiveBreak(userId: string): Promise<Break | undefined>;
+  updateBreak(id: number, updates: { endTime?: Date; duration?: number; exceededLimit?: boolean }): Promise<Break>;
+  getUserBreaks(userId: string): Promise<Break[]>;
+  getBreak(id: number): Promise<Break | undefined>;
+  
+  // Break notification operations
+  createBreakNotification(notification: { breakId: number; userId: string; message: string }): Promise<BreakNotification>;
+  getAllBreakNotifications(): Promise<BreakNotification[]>;
+  getUnreadBreakNotifications(): Promise<BreakNotification[]>;
+  markBreakNotificationAsRead(id: number): Promise<BreakNotification>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -339,6 +358,100 @@ export class DatabaseStorage implements IStorage {
     }
     
     return request;
+  }
+
+  // Break operations
+  async createBreak(breakData: { userId: string; startTime: Date }): Promise<Break> {
+    const [newBreak] = await db
+      .insert(breaks)
+      .values(breakData)
+      .returning();
+    
+    return newBreak;
+  }
+
+  async getActiveBreak(userId: string): Promise<Break | undefined> {
+    const [activeBreak] = await db
+      .select()
+      .from(breaks)
+      .where(and(
+        eq(breaks.userId, userId),
+        isNull(breaks.endTime)
+      ))
+      .orderBy(desc(breaks.startTime))
+      .limit(1);
+    
+    return activeBreak;
+  }
+
+  async updateBreak(id: number, updates: { endTime?: Date; duration?: number; exceededLimit?: boolean }): Promise<Break> {
+    const [updatedBreak] = await db
+      .update(breaks)
+      .set(updates)
+      .where(eq(breaks.id, id))
+      .returning();
+    
+    if (!updatedBreak) {
+      throw new Error("Break not found");
+    }
+    
+    return updatedBreak;
+  }
+
+  async getUserBreaks(userId: string): Promise<Break[]> {
+    return await db
+      .select()
+      .from(breaks)
+      .where(eq(breaks.userId, userId))
+      .orderBy(desc(breaks.startTime));
+  }
+
+  async getBreak(id: number): Promise<Break | undefined> {
+    const [breakRecord] = await db
+      .select()
+      .from(breaks)
+      .where(eq(breaks.id, id));
+    
+    return breakRecord;
+  }
+
+  // Break notification operations
+  async createBreakNotification(notification: { breakId: number; userId: string; message: string }): Promise<BreakNotification> {
+    const [newNotification] = await db
+      .insert(breakNotifications)
+      .values(notification)
+      .returning();
+    
+    return newNotification;
+  }
+
+  async getAllBreakNotifications(): Promise<BreakNotification[]> {
+    return await db
+      .select()
+      .from(breakNotifications)
+      .orderBy(desc(breakNotifications.createdAt));
+  }
+
+  async getUnreadBreakNotifications(): Promise<BreakNotification[]> {
+    return await db
+      .select()
+      .from(breakNotifications)
+      .where(eq(breakNotifications.isRead, false))
+      .orderBy(desc(breakNotifications.createdAt));
+  }
+
+  async markBreakNotificationAsRead(id: number): Promise<BreakNotification> {
+    const [notification] = await db
+      .update(breakNotifications)
+      .set({ isRead: true })
+      .where(eq(breakNotifications.id, id))
+      .returning();
+    
+    if (!notification) {
+      throw new Error("Break notification not found");
+    }
+    
+    return notification;
   }
 }
 
