@@ -107,6 +107,59 @@ export const ptoRequestsRelations = relations(ptoRequests, ({ one }) => ({
   }),
 }));
 
+// Breaks table for tracking lunch/break times
+export const breaks = pgTable(
+  "breaks",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+    startTime: timestamp("start_time").notNull(),
+    endTime: timestamp("end_time"),
+    duration: integer("duration"), // Duration in minutes
+    exceededLimit: boolean("exceeded_limit").default(false).notNull(), // True if break exceeded 30 minutes
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("IDX_breaks_user_id").on(table.userId),
+    index("IDX_breaks_start_time").on(table.startTime),
+  ]
+);
+
+export const breaksRelations = relations(breaks, ({ one }) => ({
+  user: one(users, {
+    fields: [breaks.userId],
+    references: [users.id],
+  }),
+}));
+
+// Break notifications table for alerting admins/managers about exceeded breaks
+export const breakNotifications = pgTable(
+  "break_notifications",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    breakId: integer("break_id").notNull().references(() => breaks.id, { onDelete: 'cascade' }),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+    message: varchar("message").notNull(),
+    isRead: boolean("is_read").default(false).notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("IDX_break_notifications_user_id").on(table.userId),
+    index("IDX_break_notifications_is_read").on(table.isRead),
+  ]
+);
+
+export const breakNotificationsRelations = relations(breakNotifications, ({ one }) => ({
+  break: one(breaks, {
+    fields: [breakNotifications.breakId],
+    references: [breaks.id],
+  }),
+  user: one(users, {
+    fields: [breakNotifications.userId],
+    references: [users.id],
+  }),
+}));
+
 // Zod schemas for validation
 export const upsertUserSchema = createInsertSchema(users).pick({
   id: true,
@@ -173,6 +226,14 @@ export const updatePtoBalanceSchema = z.object({
   ptoBalance: z.string().regex(/^\d+(\.\d{1,2})?$/, "Invalid PTO balance format"),
 });
 
+export const startBreakSchema = z.object({
+  startTime: z.string().datetime(),
+});
+
+export const endBreakSchema = z.object({
+  endTime: z.string().datetime(),
+});
+
 // TypeScript types
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -185,3 +246,9 @@ export type PtoRequest = typeof ptoRequests.$inferSelect;
 export type CreatePtoRequest = z.infer<typeof createPtoRequestSchema>;
 export type ReviewPtoRequest = z.infer<typeof reviewPtoRequestSchema>;
 export type UpdatePtoBalance = z.infer<typeof updatePtoBalanceSchema>;
+export type Break = typeof breaks.$inferSelect;
+export type InsertBreak = typeof breaks.$inferInsert;
+export type StartBreak = z.infer<typeof startBreakSchema>;
+export type EndBreak = z.infer<typeof endBreakSchema>;
+export type BreakNotification = typeof breakNotifications.$inferSelect;
+export type InsertBreakNotification = typeof breakNotifications.$inferInsert;
