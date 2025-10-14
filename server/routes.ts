@@ -673,6 +673,113 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Start a break
+  app.post('/api/breaks/start', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      // Check if there's already an active break
+      const activeBreak = await storage.getActiveBreak(userId);
+      if (activeBreak) {
+        return res.status(400).json({ message: "You already have an active break" });
+      }
+      
+      // Check if user is clocked in
+      const activeTimeEntry = await storage.getActiveTimeEntry(userId);
+      if (!activeTimeEntry) {
+        return res.status(400).json({ message: "You must be clocked in to start a break" });
+      }
+      
+      const newBreak = await storage.createBreak({
+        userId,
+        startTime: new Date(),
+      });
+      
+      res.json(newBreak);
+    } catch (error: any) {
+      console.error("Error starting break:", error);
+      res.status(400).json({ message: error.message || "Failed to start break" });
+    }
+  });
+
+  // End a break
+  app.post('/api/breaks/end', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      // Get active break
+      const activeBreak = await storage.getActiveBreak(userId);
+      if (!activeBreak) {
+        return res.status(400).json({ message: "No active break found" });
+      }
+      
+      const endTime = new Date();
+      const duration = Math.floor((endTime.getTime() - new Date(activeBreak.startTime).getTime()) / (1000 * 60)); // Duration in minutes
+      const exceededLimit = duration > 30;
+      
+      // Update break with end time and duration
+      const updatedBreak = await storage.updateBreak(activeBreak.id, {
+        endTime,
+        duration,
+        exceededLimit,
+      });
+      
+      // If break exceeded 30 minutes, create notifications for all admins and managers
+      if (exceededLimit) {
+        const user = await storage.getUser(userId);
+        const allUsers = await storage.getAllUsers();
+        const adminsAndManagers = allUsers.filter(u => u.role === 'admin' || u.role === 'manager');
+        
+        const message = `${user?.firstName} ${user?.lastName} exceeded their break time by ${duration - 30} minutes (total: ${duration} minutes)`;
+        
+        // Create notification for each admin/manager
+        for (const adminOrManager of adminsAndManagers) {
+          await storage.createBreakNotification({
+            breakId: activeBreak.id,
+            userId: adminOrManager.id,
+            message,
+          });
+        }
+      }
+      
+      res.json(updatedBreak);
+    } catch (error: any) {
+      console.error("Error ending break:", error);
+      res.status(400).json({ message: error.message || "Failed to end break" });
+    }
+  });
+
+  // Get user's active break
+  app.get('/api/breaks/active', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const activeBreak = await storage.getActiveBreak(userId);
+      
+      res.json(activeBreak || null);
+    } catch (error: any) {
+      console.error("Error fetching active break:", error);
+      res.status(500).json({ message: "Failed to fetch active break" });
+    }
+  });
+
+  // Get break notifications (admin/manager only)
+  app.get('/api/break-notifications', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+      
+      if (!isAdminOrManager(currentUser)) {
+        return res.status(403).json({ message: "Forbidden: Admin or Manager access required" });
+      }
+      
+      const notifications = await storage.getAllBreakNotifications();
+      res.json(notifications);
+    } catch (error: any) {
+      console.error("Error fetching break notifications:", error);
+      res.status(500).json({ message: "Failed to fetch break notifications" });
+    }
+  });
+
   // Delete employee - admin only
   app.delete('/api/employees/:id', isAuthenticated, async (req: any, res) => {
     try {
