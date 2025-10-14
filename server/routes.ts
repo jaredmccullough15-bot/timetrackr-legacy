@@ -802,6 +802,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get employee break history (admin/manager only)
+  app.get('/api/employees/:id/breaks', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+      const employeeId = req.params.id;
+      
+      if (!isAdminOrManager(currentUser)) {
+        return res.status(403).json({ message: "Forbidden: Admin or Manager access required" });
+      }
+      
+      const breaks = await storage.getUserBreaks(employeeId);
+      res.json(breaks);
+    } catch (error: any) {
+      console.error("Error fetching employee breaks:", error);
+      res.status(500).json({ message: "Failed to fetch employee breaks" });
+    }
+  });
+
   // Delete employee - admin only
   app.delete('/api/employees/:id', isAuthenticated, async (req: any, res) => {
     try {
