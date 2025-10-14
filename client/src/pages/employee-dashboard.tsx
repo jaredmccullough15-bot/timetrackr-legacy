@@ -13,9 +13,9 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { StatCard } from "@/components/StatCard";
 import { ClockStatusBadge } from "@/components/ClockStatusBadge";
-import { Clock, DollarSign, Heart, TrendingUp, LogOut, Calendar } from "lucide-react";
+import { Clock, DollarSign, Heart, TrendingUp, LogOut, Calendar, Coffee } from "lucide-react";
 import { formatCurrency, formatDateTime, formatDuration, getWeekBounds } from "@/lib/timeUtils";
-import type { TimeEntry, PtoRequest } from "@shared/schema";
+import type { TimeEntry, PtoRequest, Break } from "@shared/schema";
 
 export default function EmployeeDashboard() {
   const { user, isLoading: authLoading } = useAuth();
@@ -45,6 +45,12 @@ export default function EmployeeDashboard() {
   const { data: ptoRequests, isLoading: ptoRequestsLoading } = useQuery<PtoRequest[]>({
     queryKey: ["/api/pto-requests"],
     enabled: !!user,
+  });
+
+  const { data: activeBreak, isLoading: activeBreakLoading } = useQuery<Break | null>({
+    queryKey: ["/api/breaks/active"],
+    enabled: !!user,
+    refetchInterval: 1000, // Refetch every second to update timer
   });
 
   const clockInMutation = useMutation({
@@ -191,6 +197,51 @@ export default function EmployeeDashboard() {
     ptoRequestMutation.mutate();
   };
 
+  // Break mutations
+  const startBreakMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/breaks/start", {
+        startTime: new Date().toISOString(),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/breaks/active"] });
+      toast({
+        title: "Break Started",
+        description: "Your break timer has started.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const endBreakMutation = useMutation({
+    mutationFn: async () => {
+      await apiRequest("POST", "/api/breaks/end", {
+        endTime: new Date().toISOString(),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/breaks/active"] });
+      toast({
+        title: "Break Ended",
+        description: "Your break has been recorded.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   if (authLoading || !user) {
     return (
       <div className="min-h-screen bg-background p-8">
@@ -326,6 +377,32 @@ export default function EmployeeDashboard() {
                   </>
                 )}
               </Button>
+              
+              {/* Lunch/Break Button */}
+              {isClockedIn && (
+                <Button
+                  size="lg"
+                  className={`w-full min-h-16 ${activeBreak ? 'bg-orange-600 hover:bg-orange-600 dark:bg-orange-700 dark:hover:bg-orange-700' : ''}`}
+                  onClick={() => activeBreak ? endBreakMutation.mutate() : startBreakMutation.mutate()}
+                  disabled={startBreakMutation.isPending || endBreakMutation.isPending}
+                  data-testid={activeBreak ? "button-end-break" : "button-start-break"}
+                  variant={activeBreak ? "default" : "outline"}
+                >
+                  {startBreakMutation.isPending || endBreakMutation.isPending ? (
+                    "Processing..."
+                  ) : activeBreak ? (
+                    <>
+                      <Coffee className="w-5 h-5 mr-2" />
+                      End Break ({Math.floor((Date.now() - new Date(activeBreak.startTime).getTime()) / (1000 * 60))} min)
+                    </>
+                  ) : (
+                    <>
+                      <Coffee className="w-5 h-5 mr-2" />
+                      Lunch/Break
+                    </>
+                  )}
+                </Button>
+              )}
               
               <Dialog open={isPtoDialogOpen} onOpenChange={setIsPtoDialogOpen}>
                 <DialogTrigger asChild>

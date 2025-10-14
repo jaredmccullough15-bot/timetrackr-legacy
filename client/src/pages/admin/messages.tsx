@@ -7,9 +7,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Calendar, Check, X, Inbox, Users } from "lucide-react";
+import { Calendar, Check, X, Inbox, Users, Coffee, AlertTriangle } from "lucide-react";
 import { formatDuration } from "@/lib/timeUtils";
-import type { PtoRequest, User } from "@shared/schema";
+import type { PtoRequest, User, BreakNotification } from "@shared/schema";
 
 type PtoRequestWithUser = PtoRequest & {
   user?: User;
@@ -37,6 +37,11 @@ export default function AdminMessages() {
 
   const { data: employeesData } = useQuery<Array<{ user: User; entries: any[]; weeklyHours: number; isClockedIn: boolean }>>({
     queryKey: ["/api/employees"],
+    enabled: !!user,
+  });
+
+  const { data: breakNotifications, isLoading: breakNotificationsLoading } = useQuery<BreakNotification[]>({
+    queryKey: ["/api/break-notifications"],
     enabled: !!user,
   });
 
@@ -265,6 +270,29 @@ export default function AdminMessages() {
             </div>
           )}
         </>
+      )}
+
+      {/* Break Notifications Section */}
+      {breakNotifications && breakNotifications.length > 0 && (
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-orange-500" />
+            Break Time Alerts
+          </h2>
+          <div className="grid gap-3">
+            {breakNotifications.map((notification) => (
+              <Alert key={notification.id} className="border-orange-500/50" data-testid={`break-notification-${notification.id}`}>
+                <Coffee className="w-4 h-4 text-orange-500" />
+                <AlertDescription className="ml-2">
+                  {notification.message}
+                  <span className="block text-xs text-muted-foreground mt-1">
+                    {new Date(notification.createdAt!).toLocaleString()}
+                  </span>
+                </AlertDescription>
+              </Alert>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

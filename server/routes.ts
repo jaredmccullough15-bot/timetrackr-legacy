@@ -117,12 +117,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Not currently clocked in" });
       }
 
-      // Update the entry with clock out time
+      let clockOutTime = new Date(validatedData.clockOut);
+      
+      // Check if there are any breaks during this session that exceeded 30 minutes
+      const userBreaks = await storage.getUserBreaks(userId);
+      const exceededBreaks = userBreaks.filter(b => 
+        new Date(b.startTime) >= new Date(activeEntry.clockIn) &&
+        b.exceededLimit === true
+      );
+      
+      // Deduct 1 hour for EACH break that exceeded the limit
+      if (exceededBreaks.length > 0) {
+        const oneHourInMs = 60 * 60 * 1000;
+        const totalDeduction = oneHourInMs * exceededBreaks.length;
+        clockOutTime = new Date(clockOutTime.getTime() - totalDeduction);
+        
+        // Ensure clock-out time doesn't go before clock-in time
+        const clockInTime = new Date(activeEntry.clockIn);
+        if (clockOutTime < clockInTime) {
+          clockOutTime = clockInTime; // Set to clock-in time (0 hours worked)
+        }
+      }
+      
+      // Update the entry with clock out time (possibly adjusted for break overtime)
       const updatedEntry = await storage.updateTimeEntry(activeEntry.id, {
-        clockOut: new Date(validatedData.clockOut),
+        clockOut: clockOutTime,
       });
 
-      // Calculate hours worked
+      // Calculate hours worked (after any break deductions)
       const hoursWorked = (updatedEntry.clockOut!.getTime() - updatedEntry.clockIn.getTime()) / (1000 * 60 * 60);
       
       // Calculate sick time accrual (1 hour per 30 hours worked)
@@ -724,13 +746,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         exceededLimit,
       });
       
-      // If break exceeded 30 minutes, create notifications for all admins and managers
+      // If break exceeded 30 minutes, create notifications (pay deduction happens at clock-out)
       if (exceededLimit) {
         const user = await storage.getUser(userId);
         const allUsers = await storage.getAllUsers();
         const adminsAndManagers = allUsers.filter(u => u.role === 'admin' || u.role === 'manager');
         
-        const message = `${user?.firstName} ${user?.lastName} exceeded their break time by ${duration - 30} minutes (total: ${duration} minutes)`;
+        const message = `${user?.firstName} ${user?.lastName} exceeded their break time by ${duration - 30} minutes (total: ${duration} minutes) - 1 hour will be deducted at clock-out`;
         
         // Create notification for each admin/manager
         for (const adminOrManager of adminsAndManagers) {
