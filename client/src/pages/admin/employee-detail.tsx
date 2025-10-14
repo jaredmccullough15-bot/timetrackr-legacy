@@ -27,9 +27,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { TimeEntryModal } from "@/components/TimeEntryModal";
-import { ArrowLeft, Plus, Edit, Trash2, DollarSign, Heart, Clock, Shield, UserX } from "lucide-react";
+import { ArrowLeft, Plus, Edit, Trash2, DollarSign, Heart, Clock, Shield, UserX, Coffee } from "lucide-react";
 import { formatDuration, formatDateTime, formatCurrency } from "@/lib/timeUtils";
-import type { TimeEntry } from "@shared/schema";
+import type { TimeEntry, Break } from "@shared/schema";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -96,6 +96,11 @@ export default function EmployeeDetail() {
   });
 
   const employee = employees?.find((e) => e.user.id === employeeId);
+
+  const { data: breaks = [] } = useQuery<Break[]>({
+    queryKey: ['/api/employees', employeeId, 'breaks'],
+    enabled: !!(currentUser?.role === 'admin' || currentUser?.role === 'manager') && !!employeeId,
+  });
 
   const deleteMutation = useMutation({
     mutationFn: async (entryId: number) => {
@@ -349,6 +354,63 @@ export default function EmployeeDetail() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Break History Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Coffee className="w-5 h-5" />
+            Break/Lunch History
+          </CardTitle>
+          <CardDescription>View all break and lunch records</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!breaks || breaks.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No breaks recorded
+            </div>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Start Time</TableHead>
+                    <TableHead>End Time</TableHead>
+                    <TableHead className="text-right">Duration</TableHead>
+                    <TableHead className="text-right">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {breaks.map((breakEntry) => (
+                    <TableRow key={breakEntry.id} data-testid={`break-row-${breakEntry.id}`}>
+                      <TableCell>{formatDateTime(breakEntry.startTime)}</TableCell>
+                      <TableCell>{breakEntry.endTime ? formatDateTime(breakEntry.endTime) : "Active"}</TableCell>
+                      <TableCell className="text-right">
+                        {breakEntry.duration ? `${breakEntry.duration} min` : "-"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {breakEntry.exceededLimit ? (
+                          <Badge variant="destructive" data-testid={`break-exceeded-${breakEntry.id}`}>
+                            Overtime
+                          </Badge>
+                        ) : breakEntry.endTime ? (
+                          <Badge variant="outline" data-testid={`break-normal-${breakEntry.id}`}>
+                            Normal
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" data-testid={`break-active-${breakEntry.id}`}>
+                            Active
+                          </Badge>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <TimeEntryModal
         open={showEntryModal}
