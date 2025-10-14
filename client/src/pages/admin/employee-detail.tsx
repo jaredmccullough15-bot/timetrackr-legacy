@@ -98,7 +98,7 @@ export default function EmployeeDetail() {
   const employee = employees?.find((e) => e.user.id === employeeId);
 
   const { data: breaks = [] } = useQuery<Break[]>({
-    queryKey: ['/api/employees', employeeId, 'breaks'],
+    queryKey: [`/api/employees/${employeeId}/breaks`],
     enabled: !!(currentUser?.role === 'admin' || currentUser?.role === 'manager') && !!employeeId,
   });
 
