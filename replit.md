@@ -57,6 +57,10 @@ Preferred communication style: Simple, everyday language.
 - `/api/employees/:id/pto` - PTO balance management (admin/manager, PATCH)
 - `/api/pto-requests` - PTO request creation and management (GET/POST)
 - `/api/pto-requests/:id` - PTO request approval/denial (admin/manager, PATCH)
+- `/api/breaks/start` - Start a break (employee, requires active clock-in)
+- `/api/breaks/end` - End break, flag overtime, notify admins (employee)
+- `/api/breaks/active` - Get active break for timer display (employee)
+- `/api/break-notifications` - Get break overtime notifications (admin/manager)
 - `/api/reports` - Payroll and time reports (admin/manager access)
 
 **Business Logic:**
@@ -66,6 +70,15 @@ Preferred communication style: Simple, everyday language.
 - Pay rate and PTO balance management per employee
 - Real-time clock status tracking
 - Separate sick time and PTO balances
+- **Break tracking with pay deduction:**
+  - Employees can take breaks while clocked in
+  - Breaks are paid time (hourly rate continues during break)
+  - 30-minute threshold for break overtime
+  - If break exceeds 30 minutes: 1 hour of pay is deducted per exceeded break
+  - Multiple exceeded breaks result in multiple 1-hour deductions
+  - Deductions applied at clock-out (clock-out time adjusted backwards)
+  - Safeguard prevents negative hours worked (minimum 0 hours)
+  - Admins and managers receive notifications when breaks exceed 30 minutes
 
 ### Database Architecture
 
@@ -83,6 +96,11 @@ Preferred communication style: Simple, everyday language.
    - Timestamps for record keeping
    - Legacy isAdmin field maintained for backward compatibility
 
+2. **timeEntries table** - Clock in/out records
+   - Foreign key relationship to users (cascade delete)
+   - Nullable clockOut for active entries
+   - Indexed by userId and timestamps for query performance
+
 3. **ptoRequests table** - PTO request tracking and approval workflow
    - Foreign key relationship to users (cascade delete)
    - Start date, end date, and hours requested
@@ -90,18 +108,26 @@ Preferred communication style: Simple, everyday language.
    - Reviewer tracking (who approved/denied and when)
    - Indexed by userId and status for query performance
 
-2. **timeEntries table** - Clock in/out records
+4. **breaks table** - Break/lunch tracking with overtime detection
    - Foreign key relationship to users (cascade delete)
-   - Nullable clockOut for active entries
-   - Indexed by userId and timestamps for query performance
+   - Start time, end time (nullable for active breaks), duration in minutes
+   - exceededLimit flag (true if break > 30 minutes)
+   - Indexed by userId and startTime for query performance
 
-3. **sessions table** - Session management for authentication
+5. **breakNotifications table** - Break overtime notifications for admins/managers
+   - Foreign key relationship to breaks and users (cascade delete)
+   - Message text, isRead flag, timestamps
+   - Indexed by userId and isRead for query performance
+
+6. **sessions table** - Session management for authentication
    - Stores serialized session data
    - TTL-based expiration with index on expire column
 
 **Data Relationships:**
 - One-to-many: User → TimeEntries
-- Automatic cleanup of time entries when user is deleted
+- One-to-many: User → Breaks
+- One-to-many: Break → BreakNotifications
+- Automatic cleanup of time entries, breaks, and notifications when user is deleted
 
 ### Authentication & Authorization
 
