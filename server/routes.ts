@@ -20,6 +20,24 @@ import {
 import { startOfWeek, endOfWeek } from "date-fns";
 import bcrypt from "bcryptjs";
 
+function roundToNearestQuarterHour(date: Date): Date {
+  const rounded = new Date(date);
+  const minutes = rounded.getMinutes();
+  const roundedMinutes = Math.round(minutes / 15) * 15;
+  
+  if (roundedMinutes === 60) {
+    rounded.setHours(rounded.getHours() + 1);
+    rounded.setMinutes(0);
+  } else {
+    rounded.setMinutes(roundedMinutes);
+  }
+  
+  rounded.setSeconds(0);
+  rounded.setMilliseconds(0);
+  
+  return rounded;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Setup Replit Auth middleware
   await setupAuth(app);
@@ -93,9 +111,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Already clocked in" });
       }
 
+      // Round clock-in time to nearest quarter hour
+      const roundedClockIn = roundToNearestQuarterHour(new Date(validatedData.clockIn));
+
       const newEntry = await storage.createTimeEntry({
         userId,
-        clockIn: new Date(validatedData.clockIn),
+        clockIn: roundedClockIn,
         clockOut: null,
       });
 
