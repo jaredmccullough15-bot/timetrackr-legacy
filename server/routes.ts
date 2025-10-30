@@ -23,15 +23,23 @@ import bcrypt from "bcryptjs";
 function roundToNearestQuarterHour(date: Date): Date {
   const rounded = new Date(date);
   const minutes = rounded.getMinutes();
-  const roundedMinutes = Math.round(minutes / 15) * 15;
   
-  if (roundedMinutes === 60) {
-    rounded.setHours(rounded.getHours() + 1);
-    rounded.setMinutes(0);
+  let roundedMinutes: number;
+  
+  if (minutes <= 7) {
+    roundedMinutes = 0;
+  } else if (minutes <= 22) {
+    roundedMinutes = 15;
+  } else if (minutes <= 37) {
+    roundedMinutes = 30;
+  } else if (minutes <= 52) {
+    roundedMinutes = 45;
   } else {
-    rounded.setMinutes(roundedMinutes);
+    rounded.setHours(rounded.getHours() + 1);
+    roundedMinutes = 0;
   }
   
+  rounded.setMinutes(roundedMinutes);
   rounded.setSeconds(0);
   rounded.setMilliseconds(0);
   
