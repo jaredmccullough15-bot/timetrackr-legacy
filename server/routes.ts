@@ -24,22 +24,17 @@ function roundToNearestQuarterHour(date: Date): Date {
   const rounded = new Date(date);
   const minutes = rounded.getMinutes();
   
-  let roundedMinutes: number;
+  // Round to nearest 15-minute interval
+  // Midpoint is at 7.5, 22.5, 37.5, 52.5
+  const roundedMinutes = Math.round(minutes / 15) * 15;
   
-  if (minutes <= 7) {
-    roundedMinutes = 0;
-  } else if (minutes <= 22) {
-    roundedMinutes = 15;
-  } else if (minutes <= 37) {
-    roundedMinutes = 30;
-  } else if (minutes <= 52) {
-    roundedMinutes = 45;
-  } else {
+  if (roundedMinutes === 60) {
     rounded.setHours(rounded.getHours() + 1);
-    roundedMinutes = 0;
+    rounded.setMinutes(0);
+  } else {
+    rounded.setMinutes(roundedMinutes);
   }
   
-  rounded.setMinutes(roundedMinutes);
   rounded.setSeconds(0);
   rounded.setMilliseconds(0);
   
