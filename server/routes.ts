@@ -22,11 +22,15 @@ import bcrypt from "bcryptjs";
 
 function roundToNearestQuarterHour(date: Date): Date {
   const rounded = new Date(date);
-  const minutes = rounded.getMinutes();
+  
+  // Convert to total minutes as decimal (including seconds and milliseconds)
+  const totalMinutes = rounded.getMinutes() + 
+                       rounded.getSeconds() / 60 + 
+                       rounded.getMilliseconds() / 60000;
   
   // Round to nearest 15-minute interval
   // Midpoint is at 7.5, 22.5, 37.5, 52.5
-  const roundedMinutes = Math.round(minutes / 15) * 15;
+  const roundedMinutes = Math.round(totalMinutes / 15) * 15;
   
   if (roundedMinutes === 60) {
     rounded.setHours(rounded.getHours() + 1);
