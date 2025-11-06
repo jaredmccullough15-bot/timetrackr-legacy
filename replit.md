@@ -64,6 +64,12 @@ Preferred communication style: Simple, everyday language.
 - `/api/reports` - Payroll and time reports (admin/manager access)
 
 **Business Logic:**
+- **Quarter-hour rounding on clock-in:**
+  - Clock-in times automatically round to nearest 15-minute interval (:00, :15, :30, :45)
+  - Accounts for seconds and milliseconds in rounding calculation
+  - Midpoint behavior: 7.5 minutes rounds up (e.g., 9:07:30 → 9:15)
+  - Examples: 5:53am → 6:00am, 9:08am → 9:15am, 9:22am → 9:15am
+  - Implemented in roundToNearestQuarterHour() utility function
 - Automatic sick time accrual (1 hour per 30 hours worked)
 - PTO request/approval workflow with balance validation
 - Weekly hour calculations with configurable date ranges
