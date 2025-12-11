@@ -737,8 +737,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Update request status back to pending
       const updatedRequest = await storage.updatePtoRequest(requestId, {
         status: 'pending',
-        reviewedBy: undefined,
-        reviewedAt: undefined,
+        reviewedBy: null,
+        reviewedAt: null,
       });
       
       res.json(updatedRequest);

@@ -346,7 +346,7 @@ export class DatabaseStorage implements IStorage {
     return request;
   }
 
-  async updatePtoRequest(id: number, updates: { status?: 'pending' | 'approved' | 'denied'; reviewedBy?: string; reviewedAt?: Date }): Promise<PtoRequest> {
+  async updatePtoRequest(id: number, updates: { status?: 'pending' | 'approved' | 'denied'; reviewedBy?: string | null; reviewedAt?: Date | null }): Promise<PtoRequest> {
     const [request] = await db
       .update(ptoRequests)
       .set(updates)
