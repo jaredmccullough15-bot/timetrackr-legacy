@@ -187,6 +187,10 @@ Preferred communication style: Simple, everyday language.
 **Email Notifications:**
 - PTO request submission: All managers and admins receive email notification
 - PTO approval/denial: Employee receives email notification with decision details
+- Weekly timesheet report: Automated email every Friday at 8:00 AM EST to Mat@mihealthquotes.com and jared@mihealthquotes.com
+  - Contains all employee names and their total hours for the week (Sunday-Saturday)
+  - Automatically adds 8 hours to each employee's total to account for Friday
+  - Can be manually triggered by admins via POST /api/admin/send-weekly-timesheet
 - Emails sent via connected Outlook account using Microsoft Graph API
 - Email failures are logged but don't block the main operation
 

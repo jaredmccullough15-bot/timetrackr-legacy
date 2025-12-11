@@ -154,3 +154,56 @@ export async function sendPtoDecisionNotification(
 
   await sendEmail({ to: employeeEmail, subject, body });
 }
+
+export interface EmployeeHoursData {
+  name: string;
+  hours: number;
+}
+
+export async function sendWeeklyTimesheetReport(
+  recipientEmails: string[],
+  weekStartDate: string,
+  weekEndDate: string,
+  employeeHours: EmployeeHoursData[]
+): Promise<void> {
+  const subject = `Weekly Timesheet Report: ${weekStartDate} - ${weekEndDate}`;
+  
+  const employeeRows = employeeHours
+    .map(emp => `<tr><td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${emp.name}</td><td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${emp.hours.toFixed(2)} hours</td></tr>`)
+    .join('');
+  
+  const totalHours = employeeHours.reduce((sum, emp) => sum + emp.hours, 0);
+  
+  const body = `
+    <html>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+        <h2>Weekly Timesheet Report</h2>
+        <p><strong>Work Week:</strong> ${weekStartDate} - ${weekEndDate}</p>
+        <p style="color: #6b7280; font-size: 14px;"><em>Note: 8 hours have been automatically added for each employee to account for Friday (${weekEndDate}).</em></p>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+          <thead>
+            <tr style="background-color: #f3f4f6;">
+              <th style="padding: 12px 8px; text-align: left; border-bottom: 2px solid #d1d5db;">Employee Name</th>
+              <th style="padding: 12px 8px; text-align: right; border-bottom: 2px solid #d1d5db;">Total Hours</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${employeeRows}
+          </tbody>
+          <tfoot>
+            <tr style="background-color: #f9fafb; font-weight: bold;">
+              <td style="padding: 12px 8px; border-top: 2px solid #d1d5db;">Total (All Employees)</td>
+              <td style="padding: 12px 8px; text-align: right; border-top: 2px solid #d1d5db;">${totalHours.toFixed(2)} hours</td>
+            </tr>
+          </tfoot>
+        </table>
+      </body>
+    </html>
+  `;
+
+  for (const email of recipientEmails) {
+    if (email) {
+      await sendEmail({ to: email, subject, body });
+    }
+  }
+}

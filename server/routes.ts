@@ -5,6 +5,7 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 import { recalculateSickTime } from "./sickTimeCalculator";
 import { isAdmin, isAdminOrManager, canViewFinancialData } from "./roleUtils";
 import { sendPtoRequestNotification, sendPtoDecisionNotification } from "./email";
+import { sendWeeklyTimesheet } from "./scheduler";
 import { 
   clockInSchema, 
   clockOutSchema, 
@@ -966,6 +967,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error deleting employee:", error);
       res.status(400).json({ message: error.message || "Failed to delete employee" });
+    }
+  });
+
+  // Manually trigger weekly timesheet email - admin only
+  app.post('/api/admin/send-weekly-timesheet', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+      
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Forbidden: Admin access required" });
+      }
+      
+      await sendWeeklyTimesheet();
+      
+      res.json({ success: true, message: "Weekly timesheet email sent successfully" });
+    } catch (error: any) {
+      console.error("Error sending weekly timesheet:", error);
+      res.status(500).json({ message: error.message || "Failed to send weekly timesheet email" });
     }
   });
 
