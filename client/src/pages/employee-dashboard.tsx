@@ -535,8 +535,8 @@ export default function EmployeeDashboard() {
             <CardContent>
               <div className="space-y-3">
                 {ptoRequests.slice().reverse().map((request) => {
-                  const startDate = new Date(request.startDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
-                  const endDate = new Date(request.endDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+                  const startDate = new Date(request.startDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric', timeZone: 'UTC' });
+                  const endDate = new Date(request.endDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric', timeZone: 'UTC' });
                   
                   const statusColor = 
                     request.status === 'approved' ? 'text-green-600 dark:text-green-400' :

@@ -147,8 +147,8 @@ export default function AdminMessages() {
                             {request.user?.firstName} {request.user?.lastName}
                           </CardTitle>
                           <CardDescription>
-                            {new Date(request.startDate).toLocaleDateString()} -{" "}
-                            {new Date(request.endDate).toLocaleDateString()}
+                            {new Date(request.startDate).toLocaleDateString('en-US', { timeZone: 'UTC' })} -{" "}
+                            {new Date(request.endDate).toLocaleDateString('en-US', { timeZone: 'UTC' })}
                           </CardDescription>
                         </div>
                         <Badge variant="secondary">Pending</Badge>
@@ -200,7 +200,7 @@ export default function AdminMessages() {
                                   {uniqueConflicts.map(conflict => (
                                     <li key={conflict.id}>
                                       {conflict.user?.firstName} {conflict.user?.lastName} 
-                                      {' '}({new Date(conflict.startDate).toLocaleDateString()} - {new Date(conflict.endDate).toLocaleDateString()})
+                                      {' '}({new Date(conflict.startDate).toLocaleDateString('en-US', { timeZone: 'UTC' })} - {new Date(conflict.endDate).toLocaleDateString('en-US', { timeZone: 'UTC' })})
                                     </li>
                                   ))}
                                 </ul>
@@ -254,8 +254,8 @@ export default function AdminMessages() {
                             {request.user?.firstName} {request.user?.lastName}
                           </CardTitle>
                           <CardDescription>
-                            {new Date(request.startDate).toLocaleDateString()} -{" "}
-                            {new Date(request.endDate).toLocaleDateString()}
+                            {new Date(request.startDate).toLocaleDateString('en-US', { timeZone: 'UTC' })} -{" "}
+                            {new Date(request.endDate).toLocaleDateString('en-US', { timeZone: 'UTC' })}
                           </CardDescription>
                         </div>
                         <Badge
