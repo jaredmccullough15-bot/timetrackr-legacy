@@ -57,6 +57,7 @@ Preferred communication style: Simple, everyday language.
 - `/api/employees/:id/pto` - PTO balance management (admin/manager, PATCH)
 - `/api/pto-requests` - PTO request creation and management (GET/POST)
 - `/api/pto-requests/:id` - PTO request approval/denial (admin/manager, PATCH)
+- `/api/pto-requests/:id/unapprove` - Revoke approved PTO and refund hours to balance (admin/manager, POST)
 - `/api/breaks/start` - Start a break (employee, requires active clock-in)
 - `/api/breaks/end` - End break, flag overtime, notify admins (employee)
 - `/api/breaks/active` - Get active break for timer display (employee)
@@ -71,7 +72,13 @@ Preferred communication style: Simple, everyday language.
   - Examples: 5:53am → 6:00am, 9:08am → 9:15am, 9:22am → 9:15am
   - Implemented in roundToNearestQuarterHour() utility function
 - Automatic sick time accrual (1 hour per 30 hours worked)
-- PTO request/approval workflow with balance validation
+- **PTO request/approval workflow with balance validation:**
+  - Employees can submit PTO requests
+  - Managers/admins can approve or deny requests
+  - Approved requests automatically deduct hours from employee's PTO balance
+  - **Unapproval feature:** Managers/admins can revoke approved PTO, returning hours to employee's balance
+  - **Conflict detection:** When reviewing a PTO request, the system shows other employees with approved PTO during the same dates
+  - **PTO Calendar:** Visual monthly calendar showing all approved time off across the team
 - Weekly hour calculations with configurable date ranges
 - Pay rate and PTO balance management per employee
 - Real-time clock status tracking
