@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Calendar, Check, X, Inbox, Users, Coffee, AlertTriangle } from "lucide-react";
+import { Calendar, Check, X, Inbox, Users, Coffee, AlertTriangle, Undo2 } from "lucide-react";
 import { formatDuration } from "@/lib/timeUtils";
 import type { PtoRequest, User, BreakNotification } from "@shared/schema";
 
@@ -55,6 +55,27 @@ export default function AdminMessages() {
       toast({
         title: variables.status === "approved" ? "Request Approved" : "Request Denied",
         description: `PTO request has been ${variables.status}.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const unapproveMutation = useMutation({
+    mutationFn: async (id: number) => {
+      await apiRequest("POST", `/api/pto-requests/${id}/unapprove`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pto-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      toast({
+        title: "PTO Unapproved",
+        description: "The PTO request has been revoked and hours returned to employee.",
       });
     },
     onError: (error: Error) => {
@@ -244,7 +265,7 @@ export default function AdminMessages() {
                         </Badge>
                       </div>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="space-y-4">
                       <div className="grid grid-cols-2 gap-4 text-sm">
                         <div>
                           <p className="text-muted-foreground">Hours Requested</p>
@@ -263,6 +284,18 @@ export default function AdminMessages() {
                           </p>
                         </div>
                       </div>
+                      {request.status === "approved" && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => unapproveMutation.mutate(request.id)}
+                          disabled={unapproveMutation.isPending}
+                          data-testid={`button-unapprove-${request.id}`}
+                        >
+                          <Undo2 className="w-4 h-4 mr-1" />
+                          Unapprove & Refund PTO
+                        </Button>
+                      )}
                     </CardContent>
                   </Card>
                 ))}
