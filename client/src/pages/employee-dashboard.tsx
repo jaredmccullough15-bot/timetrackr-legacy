@@ -150,9 +150,10 @@ export default function EmployeeDashboard() {
 
   const ptoRequestMutation = useMutation({
     mutationFn: async () => {
+      // Append T12:00:00 to avoid timezone issues - ensures date stays on correct day
       await apiRequest("POST", "/api/pto-requests", {
-        startDate: new Date(ptoStartDate).toISOString(),
-        endDate: new Date(ptoEndDate).toISOString(),
+        startDate: new Date(ptoStartDate + "T12:00:00").toISOString(),
+        endDate: new Date(ptoEndDate + "T12:00:00").toISOString(),
         hours: ptoHours,
       });
     },
