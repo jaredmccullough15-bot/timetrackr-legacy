@@ -34,9 +34,12 @@ async function calculateWeeklyHoursForAllEmployees(): Promise<EmployeeHoursData[
     
     totalHours += FRIDAY_HOURS_ADDITION;
     
+    // Round to nearest whole hour
+    const roundedHours = Math.round(totalHours);
+    
     employeeHours.push({
       name: `${user.firstName} ${user.lastName}`,
-      hours: totalHours
+      hours: roundedHours
     });
   }
   

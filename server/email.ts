@@ -169,7 +169,7 @@ export async function sendWeeklyTimesheetReport(
   const subject = `Weekly Timesheet Report: ${weekStartDate} - ${weekEndDate}`;
   
   const employeeRows = employeeHours
-    .map(emp => `<tr><td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${emp.name}</td><td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${emp.hours.toFixed(2)} hours</td></tr>`)
+    .map(emp => `<tr><td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${emp.name}</td><td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${emp.hours} hours</td></tr>`)
     .join('');
   
   const totalHours = employeeHours.reduce((sum, emp) => sum + emp.hours, 0);
@@ -193,7 +193,7 @@ export async function sendWeeklyTimesheetReport(
           <tfoot>
             <tr style="background-color: #f9fafb; font-weight: bold;">
               <td style="padding: 12px 8px; border-top: 2px solid #d1d5db;">Total (All Employees)</td>
-              <td style="padding: 12px 8px; text-align: right; border-top: 2px solid #d1d5db;">${totalHours.toFixed(2)} hours</td>
+              <td style="padding: 12px 8px; text-align: right; border-top: 2px solid #d1d5db;">${totalHours} hours</td>
             </tr>
           </tfoot>
         </table>
