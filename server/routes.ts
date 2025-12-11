@@ -5,7 +5,7 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 import { recalculateSickTime } from "./sickTimeCalculator";
 import { isAdmin, isAdminOrManager, canViewFinancialData } from "./roleUtils";
 import { sendPtoRequestNotification, sendPtoDecisionNotification } from "./email";
-import { sendWeeklyTimesheet } from "./scheduler";
+import { sendWeeklyTimesheet, runYearlyBalanceReset } from "./scheduler";
 import { 
   clockInSchema, 
   clockOutSchema, 
@@ -1019,6 +1019,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error sending weekly timesheet:", error);
       res.status(500).json({ message: error.message || "Failed to send weekly timesheet email" });
+    }
+  });
+
+  // Manually trigger yearly balance reset - admin only
+  app.post('/api/admin/run-yearly-reset', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+      
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Forbidden: Admin access required" });
+      }
+      
+      const year = parseInt(req.query.year as string) || new Date().getFullYear();
+      const dryRun = req.query.dryRun === 'true';
+      
+      const result = await runYearlyBalanceReset(year, dryRun);
+      
+      res.json({ 
+        success: true, 
+        dryRun,
+        message: dryRun 
+          ? `Dry run completed for ${year}. No changes were made.`
+          : `Yearly balance reset completed for ${year}.`,
+        result 
+      });
+    } catch (error: any) {
+      console.error("Error running yearly balance reset:", error);
+      res.status(500).json({ message: error.message || "Failed to run yearly balance reset" });
     }
   });
 

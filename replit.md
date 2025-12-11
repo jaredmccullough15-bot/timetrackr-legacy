@@ -194,6 +194,14 @@ Preferred communication style: Simple, everyday language.
 - Emails sent via connected Outlook account using Microsoft Graph API
 - Email failures are logged but don't block the main operation
 
+**Yearly Balance Reset (January 1st):**
+- Automatically runs at midnight EST on January 1st each year
+- Resets sick time to 72 hours for ALL employees
+- Resets PTO to 64 hours for employees WITHOUT approved PTO for the new year
+- Employees with already-approved PTO for the new year keep their current PTO balance
+- Can be manually triggered by admins via POST /api/admin/run-yearly-reset?year=2026&dryRun=true
+  - dryRun=true shows what would change without making changes
+
 **Key NPM Packages:**
 - `@neondatabase/serverless` - Neon database client
 - `drizzle-orm` - Database ORM
