@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { recalculateSickTime } from "./sickTimeCalculator";
 import { isAdmin, isAdminOrManager, canViewFinancialData } from "./roleUtils";
+import { sendPtoRequestNotification, sendPtoDecisionNotification } from "./email";
 import { 
   clockInSchema, 
   clockOutSchema, 
@@ -617,6 +618,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: 'pending',
       });
       
+      // Send email notifications to managers and admins
+      try {
+        const allUsers = await storage.getAllUsers();
+        const managerEmails = allUsers
+          .filter(u => u.role === 'admin' || u.role === 'manager')
+          .map(u => u.email)
+          .filter((email): email is string => !!email);
+        
+        const employeeName = `${user.firstName} ${user.lastName}`;
+        const startDate = new Date(validatedData.startDate).toLocaleDateString('en-US', { timeZone: 'UTC' });
+        const endDate = new Date(validatedData.endDate).toLocaleDateString('en-US', { timeZone: 'UTC' });
+        
+        await sendPtoRequestNotification(managerEmails, employeeName, startDate, endDate, validatedData.hours);
+      } catch (emailError) {
+        console.error("Failed to send PTO request notification emails:", emailError);
+        // Don't fail the request if email fails
+      }
+      
       res.json(newRequest);
     } catch (error: any) {
       console.error("Error creating PTO request:", error);
@@ -675,14 +694,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         reviewedAt: new Date(),
       });
       
+      // Get employee info for email and balance update
+      const employee = await storage.getUser(ptoRequest.userId);
+      
+      if (!employee) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+      
       // If approved, deduct PTO from user's balance
       if (validatedData.status === 'approved') {
-        const employee = await storage.getUser(ptoRequest.userId);
-        
-        if (!employee) {
-          return res.status(404).json({ message: "Employee not found" });
-        }
-        
         const currentBalance = parseFloat(employee.ptoBalance || '0');
         const requestHours = parseFloat(ptoRequest.hours);
         const newBalance = (currentBalance - requestHours).toFixed(2);
@@ -690,6 +710,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateEmployee(ptoRequest.userId, {
           ptoBalance: newBalance,
         });
+      }
+      
+      // Send email notification to the employee
+      try {
+        const employeeName = `${employee.firstName} ${employee.lastName}`;
+        const reviewerName = `${currentUser?.firstName || 'A manager'} ${currentUser?.lastName || ''}`.trim();
+        const startDate = new Date(ptoRequest.startDate).toLocaleDateString('en-US', { timeZone: 'UTC' });
+        const endDate = new Date(ptoRequest.endDate).toLocaleDateString('en-US', { timeZone: 'UTC' });
+        
+        await sendPtoDecisionNotification(
+          employee.email || '',
+          employeeName,
+          validatedData.status as 'approved' | 'denied',
+          startDate,
+          endDate,
+          ptoRequest.hours,
+          reviewerName
+        );
+      } catch (emailError) {
+        console.error("Failed to send PTO decision notification email:", emailError);
+        // Don't fail the request if email fails
       }
       
       res.json(updatedRequest);

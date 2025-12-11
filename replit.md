@@ -182,6 +182,13 @@ Preferred communication style: Simple, everyday language.
 - Replit Auth (OIDC provider) for user authentication
 - Neon Database for PostgreSQL hosting
 - Google Fonts CDN for Inter font family
+- Microsoft Outlook (via Graph API) for email notifications
+
+**Email Notifications:**
+- PTO request submission: All managers and admins receive email notification
+- PTO approval/denial: Employee receives email notification with decision details
+- Emails sent via connected Outlook account using Microsoft Graph API
+- Email failures are logged but don't block the main operation
 
 **Key NPM Packages:**
 - `@neondatabase/serverless` - Neon database client
