@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { TimeEntry } from "@shared/schema";
@@ -14,6 +15,7 @@ import { format } from "date-fns";
 const formSchema = z.object({
   clockIn: z.string().min(1, "Clock in time is required"),
   clockOut: z.string().optional(),
+  entryType: z.enum(["straight", "sick"]).default("straight"),
 });
 
 interface TimeEntryModalProps {
@@ -31,6 +33,7 @@ export function TimeEntryModal({ open, onOpenChange, entry, userId }: TimeEntryM
     defaultValues: {
       clockIn: entry ? format(new Date(entry.clockIn), "yyyy-MM-dd'T'HH:mm") : "",
       clockOut: entry?.clockOut ? format(new Date(entry.clockOut), "yyyy-MM-dd'T'HH:mm") : "",
+      entryType: entry?.isSickTime ? "sick" : "straight",
     },
   });
 
@@ -40,6 +43,7 @@ export function TimeEntryModal({ open, onOpenChange, entry, userId }: TimeEntryM
         userId,
         clockIn: new Date(data.clockIn).toISOString(),
         clockOut: data.clockOut ? new Date(data.clockOut).toISOString() : undefined,
+        isSickTime: data.entryType === "sick",
       };
       const res = await apiRequest("POST", "/api/admin/time-entries", payload);
       return res.json();
@@ -131,7 +135,7 @@ export function TimeEntryModal({ open, onOpenChange, entry, userId }: TimeEntryM
               name="clockOut"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Clock Out (Optional)</FormLabel>
+                  <FormLabel>Clock Out {!entry && "(Required for sick time)"}</FormLabel>
                   <FormControl>
                     <Input type="datetime-local" {...field} data-testid="input-clock-out" />
                   </FormControl>
@@ -139,6 +143,29 @@ export function TimeEntryModal({ open, onOpenChange, entry, userId }: TimeEntryM
                 </FormItem>
               )}
             />
+            {!entry && (
+              <FormField
+                control={form.control}
+                name="entryType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Time Type</FormLabel>
+                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-entry-type">
+                          <SelectValue placeholder="Select time type" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="straight">Straight Time</SelectItem>
+                        <SelectItem value="sick">Sick Time</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancel

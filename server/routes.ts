@@ -388,15 +388,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const validatedData = createTimeEntrySchema.parse(req.body);
+      const isSickTime = validatedData.isSickTime || false;
+
+      // If using sick time, check if employee has sufficient balance
+      if (isSickTime) {
+        const employee = await storage.getUser(validatedData.userId);
+        if (!employee) {
+          return res.status(404).json({ message: "Employee not found" });
+        }
+
+        // Calculate hours for this entry
+        const clockIn = new Date(validatedData.clockIn);
+        const clockOut = validatedData.clockOut ? new Date(validatedData.clockOut) : null;
+        
+        if (!clockOut) {
+          return res.status(400).json({ message: "Clock out time is required for sick time entries" });
+        }
+
+        const hoursUsed = (clockOut.getTime() - clockIn.getTime()) / (1000 * 60 * 60);
+        const currentSickBalance = parseFloat(employee.sickTimeBalance || '0');
+
+        if (hoursUsed > currentSickBalance) {
+          return res.status(400).json({ 
+            message: `Insufficient sick time balance. Employee has ${currentSickBalance.toFixed(2)} hours available, but ${hoursUsed.toFixed(2)} hours requested.` 
+          });
+        }
+
+        // Deduct sick time from employee's balance
+        const newBalance = (currentSickBalance - hoursUsed).toFixed(2);
+        await storage.updateUserSickTime(validatedData.userId, newBalance);
+      }
 
       const newEntry = await storage.createTimeEntry({
         userId: validatedData.userId,
         clockIn: new Date(validatedData.clockIn),
         clockOut: validatedData.clockOut ? new Date(validatedData.clockOut) : null,
+        isSickTime: isSickTime,
       });
 
-      // Recalculate sick time for the employee
-      await recalculateSickTime(validatedData.userId);
+      // Only recalculate sick time accrual for straight time entries
+      if (!isSickTime) {
+        await recalculateSickTime(validatedData.userId);
+      }
 
       res.json(newEntry);
     } catch (error: any) {

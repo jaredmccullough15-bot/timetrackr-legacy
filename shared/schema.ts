@@ -61,6 +61,7 @@ export const timeEntries = pgTable(
     userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
     clockIn: timestamp("clock_in").notNull(),
     clockOut: timestamp("clock_out"),
+    isSickTime: boolean("is_sick_time").default(false).notNull(),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => [
@@ -193,6 +194,7 @@ export const createTimeEntrySchema = z.object({
   userId: z.string(),
   clockIn: z.string().datetime(),
   clockOut: z.string().datetime().optional(),
+  isSickTime: z.boolean().optional().default(false),
 });
 
 export const updateTimeEntrySchema = z.object({
