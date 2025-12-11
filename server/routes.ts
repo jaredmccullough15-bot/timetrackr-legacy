@@ -699,6 +699,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Unapprove PTO request (revoke approval and refund hours) - admin/manager only
+  app.post('/api/pto-requests/:id/unapprove', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+      const requestId = parseInt(req.params.id);
+      
+      if (!isAdminOrManager(currentUser)) {
+        return res.status(403).json({ message: "Forbidden: Admin or Manager access required" });
+      }
+      
+      const ptoRequest = await storage.getPtoRequest(requestId);
+      
+      if (!ptoRequest) {
+        return res.status(404).json({ message: "PTO request not found" });
+      }
+      
+      if (ptoRequest.status !== 'approved') {
+        return res.status(400).json({ message: "Only approved PTO requests can be unapproved" });
+      }
+      
+      // Refund the PTO hours to the employee
+      const employee = await storage.getUser(ptoRequest.userId);
+      if (!employee) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+      
+      const currentBalance = parseFloat(employee.ptoBalance || '0');
+      const requestHours = parseFloat(ptoRequest.hours);
+      const newBalance = (currentBalance + requestHours).toFixed(2);
+      
+      await storage.updateEmployee(ptoRequest.userId, {
+        ptoBalance: newBalance,
+      });
+      
+      // Update request status back to pending
+      const updatedRequest = await storage.updatePtoRequest(requestId, {
+        status: 'pending',
+        reviewedBy: undefined,
+        reviewedAt: undefined,
+      });
+      
+      res.json(updatedRequest);
+    } catch (error: any) {
+      console.error("Error unapproving PTO request:", error);
+      res.status(400).json({ message: error.message || "Failed to unapprove PTO request" });
+    }
+  });
+
   // Update employee PTO balance - admin/manager only
   app.patch('/api/employees/:id/pto', isAuthenticated, async (req: any, res) => {
     try {
