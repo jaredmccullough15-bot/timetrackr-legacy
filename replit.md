@@ -71,7 +71,11 @@ Preferred communication style: Simple, everyday language.
   - Midpoint behavior: 7.5 minutes rounds up (e.g., 9:07:30 → 9:15)
   - Examples: 5:53am → 6:00am, 9:08am → 9:15am, 9:22am → 9:15am
   - Implemented in roundToNearestQuarterHour() utility function
-- Automatic sick time accrual (1 hour per 30 hours worked)
+- **Sick time management (NO automatic accrual):**
+  - Sick time does NOT accrue automatically based on hours worked
+  - Sick time is set to 72 hours for all employees on January 1st each year
+  - Admins can manually adjust sick time balances
+  - Employees can use sick time via manual time entries marked as "sick time"
 - **PTO request/approval workflow with balance validation:**
   - Employees can submit PTO requests
   - Managers/admins can approve or deny requests

@@ -1,21 +1,12 @@
-import { storage } from "./storage";
+// Sick time accrual has been DISABLED
+// Sick time is now managed manually by admins and reset yearly to 72 hours on January 1st
+// This function is kept as a no-op to avoid breaking existing code references
 
 export async function recalculateSickTime(userId: string): Promise<void> {
-  // Get all completed time entries for the user
-  const entries = await storage.getUserTimeEntries(userId);
-  
-  // Calculate total hours worked from all completed entries
-  const totalHours = entries.reduce((sum, entry) => {
-    if (entry.clockOut) {
-      const hours = (new Date(entry.clockOut).getTime() - new Date(entry.clockIn).getTime()) / (1000 * 60 * 60);
-      return sum + hours;
-    }
-    return sum;
-  }, 0);
-  
-  // Calculate sick time accrual (1 hour per 30 hours worked)
-  const sickTimeBalance = totalHours / 30;
-  
-  // Update user's sick time balance
-  await storage.updateUserSickTime(userId, sickTimeBalance.toFixed(2));
+  // Automatic sick time accrual is disabled
+  // Sick time balance is now managed through:
+  // 1. Manual adjustments by admins
+  // 2. Yearly reset to 72 hours on January 1st
+  // 3. Deductions when employees use sick time entries
+  return;
 }
