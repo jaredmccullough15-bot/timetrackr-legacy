@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, FileText, MessageSquare, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, FileText, MessageSquare, LogOut, CalendarDays } from "lucide-react";
 import { useLocation } from "wouter";
 import {
   Sidebar,
@@ -34,6 +34,12 @@ const menuItems = [
     url: "/admin/messages",
     icon: MessageSquare,
     testId: "nav-messages",
+  },
+  {
+    title: "PTO Calendar",
+    url: "/admin/pto-calendar",
+    icon: CalendarDays,
+    testId: "nav-pto-calendar",
   },
   {
     title: "Reports",
