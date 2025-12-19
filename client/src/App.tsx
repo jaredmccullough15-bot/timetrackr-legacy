@@ -15,6 +15,7 @@ import AdminReports from "@/pages/admin/reports";
 import AdminMessages from "@/pages/admin/messages";
 import PtoCalendar from "@/pages/admin/pto-calendar";
 import EmployeeDetail from "@/pages/admin/employee-detail";
+import PunchApprovals from "@/pages/admin/punch-approvals";
 import SetupPin from "@/pages/setup-pin";
 import PinLogin from "@/pages/pin-login";
 
@@ -30,6 +31,7 @@ function Router() {
       <Route path="/admin/reports" component={AdminReports} />
       <Route path="/admin/messages" component={AdminMessages} />
       <Route path="/admin/pto-calendar" component={PtoCalendar} />
+      <Route path="/admin/punch-approvals" component={PunchApprovals} />
       <Route path="/dashboard" component={EmployeeDashboard} />
       <Route component={NotFound} />
     </Switch>

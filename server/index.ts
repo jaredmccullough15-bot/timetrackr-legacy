@@ -1,7 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { startWeeklyTimesheetScheduler, startYearlyBalanceScheduler } from "./scheduler";
+import { startWeeklyTimesheetScheduler, startYearlyBalanceScheduler, startDailyPunchApprovalScheduler } from "./scheduler";
 
 const app = express();
 app.use(express.json());
@@ -70,5 +70,6 @@ app.use((req, res, next) => {
     log(`serving on port ${port}`);
     startWeeklyTimesheetScheduler();
     startYearlyBalanceScheduler();
+    startDailyPunchApprovalScheduler();
   });
 })();

@@ -1,6 +1,6 @@
-import { startOfWeek, endOfWeek, format, startOfYear } from 'date-fns';
+import { startOfWeek, endOfWeek, format, startOfYear, subDays } from 'date-fns';
 import { storage } from './storage';
-import { sendWeeklyTimesheetReport, EmployeeHoursData } from './email';
+import { sendWeeklyTimesheetReport, EmployeeHoursData, sendPunchApprovalNotification, PendingPunchData } from './email';
 
 const TIMESHEET_RECIPIENTS = [
   'Mat@mihealthquotes.com',
@@ -217,4 +217,104 @@ export function startYearlyBalanceScheduler(): void {
   }, 60000);
 }
 
-export { sendWeeklyTimesheet, runYearlyBalanceReset };
+// Daily Punch Approval Email Logic
+async function sendDailyPunchApprovalEmails(): Promise<void> {
+  try {
+    console.log('Starting daily punch approval email job...');
+    
+    // Get previous business day
+    const today = new Date();
+    let previousDay = subDays(today, 1);
+    
+    // Skip weekends (go back to Friday if today is Monday)
+    while (previousDay.getDay() === 0 || previousDay.getDay() === 6) {
+      previousDay = subDays(previousDay, 1);
+    }
+    
+    const dateStr = format(previousDay, 'M/d/yyyy');
+    
+    // Get all managers/admins
+    const allUsers = await storage.getAllUsers();
+    const managers = allUsers.filter(u => u.role === 'manager' || u.role === 'admin');
+    
+    for (const manager of managers) {
+      // Get pending approvals for this manager's employees
+      const pendingApprovals = await storage.getPendingApprovalsForManager(manager.id);
+      
+      // Filter to only previous day's entries
+      const previousDayApprovals = pendingApprovals.filter(item => {
+        const entryDate = new Date(item.entry.clockIn);
+        return entryDate.toDateString() === previousDay.toDateString();
+      });
+      
+      if (previousDayApprovals.length === 0) {
+        continue; // No pending approvals for this manager
+      }
+      
+      // Format punch data for email
+      const pendingPunches: PendingPunchData[] = previousDayApprovals.map(item => {
+        const clockInTime = format(new Date(item.entry.clockIn), 'h:mm a');
+        const clockOutTime = item.entry.clockOut 
+          ? format(new Date(item.entry.clockOut), 'h:mm a')
+          : 'Still clocked in';
+        
+        let hours = '0';
+        if (item.entry.clockOut) {
+          const hoursWorked = (new Date(item.entry.clockOut).getTime() - new Date(item.entry.clockIn).getTime()) / (1000 * 60 * 60);
+          hours = hoursWorked.toFixed(2);
+        }
+        
+        return {
+          employeeName: `${item.user.firstName} ${item.user.lastName}`,
+          clockIn: clockInTime,
+          clockOut: clockOutTime,
+          hours
+        };
+      });
+      
+      const managerName = `${manager.firstName} ${manager.lastName}`;
+      
+      if (manager.email) {
+        await sendPunchApprovalNotification(manager.email, managerName, dateStr, pendingPunches);
+        console.log(`Punch approval email sent to ${managerName} (${manager.email}) with ${pendingPunches.length} pending punches`);
+      }
+    }
+    
+    console.log('Daily punch approval emails completed');
+  } catch (error) {
+    console.error('Failed to send daily punch approval emails:', error);
+  }
+}
+
+function isWeekday8amEST(): boolean {
+  const now = new Date();
+  const estOffset = -5 * 60;
+  const isDST = isDaylightSavingTime(now);
+  const offset = isDST ? -4 * 60 : estOffset;
+  
+  const estTime = new Date(now.getTime() + (now.getTimezoneOffset() + offset) * 60000);
+  
+  const dayOfWeek = estTime.getDay();
+  const isWeekday = dayOfWeek >= 1 && dayOfWeek <= 5; // Monday to Friday
+  const isHour8 = estTime.getHours() === 8;
+  const isFirstMinutes = estTime.getMinutes() < 5;
+  
+  return isWeekday && isHour8 && isFirstMinutes;
+}
+
+let lastPunchApprovalDate: string | null = null;
+
+export function startDailyPunchApprovalScheduler(): void {
+  console.log('Daily punch approval scheduler started - runs every weekday at 8:00 AM EST');
+  
+  setInterval(() => {
+    const today = new Date().toDateString();
+    
+    if (isWeekday8amEST() && lastPunchApprovalDate !== today) {
+      lastPunchApprovalDate = today;
+      sendDailyPunchApprovalEmails();
+    }
+  }, 60000);
+}
+
+export { sendWeeklyTimesheet, runYearlyBalanceReset, sendDailyPunchApprovalEmails };

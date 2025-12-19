@@ -4,6 +4,8 @@ import {
   ptoRequests,
   breaks,
   breakNotifications,
+  userCategories,
+  timeEntryApprovals,
   type User,
   type UpsertUser,
   type TimeEntry,
@@ -17,9 +19,13 @@ import {
   type InsertBreak,
   type BreakNotification,
   type InsertBreakNotification,
+  type UserCategory,
+  type CategoryType,
+  type TimeEntryApproval,
+  type TimeEntryApprovalStatus,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, gte, lte, isNull, not, desc } from "drizzle-orm";
+import { eq, and, gte, lte, isNull, not, desc, inArray } from "drizzle-orm";
 
 export interface IStorage {
   // User operations
@@ -65,6 +71,22 @@ export interface IStorage {
   getAllBreakNotifications(): Promise<BreakNotification[]>;
   getUnreadBreakNotifications(): Promise<BreakNotification[]>;
   markBreakNotificationAsRead(id: number): Promise<BreakNotification>;
+  
+  // Category operations
+  getUserCategories(userId: string): Promise<UserCategory[]>;
+  addUserCategory(userId: string, category: CategoryType): Promise<UserCategory>;
+  removeUserCategory(userId: string, category: CategoryType): Promise<void>;
+  getUsersByCategory(category: CategoryType): Promise<User[]>;
+  getManagersByCategory(category: CategoryType): Promise<User[]>;
+  getEmployeesForManager(managerId: string): Promise<User[]>;
+  
+  // Time entry approval operations
+  createTimeEntryApproval(timeEntryId: number): Promise<TimeEntryApproval>;
+  getTimeEntryApproval(timeEntryId: number): Promise<TimeEntryApproval | undefined>;
+  updateTimeEntryApproval(id: number, updates: { status: TimeEntryApprovalStatus; reviewedBy: string; notes?: string }): Promise<TimeEntryApproval>;
+  getPendingApprovalsForManager(managerId: string): Promise<{ approval: TimeEntryApproval; entry: TimeEntry; user: User }[]>;
+  getPendingApprovalsForDate(date: Date): Promise<{ approval: TimeEntryApproval; entry: TimeEntry; user: User }[]>;
+  hasUnapprovedPreviousDayEntry(userId: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -452,6 +474,242 @@ export class DatabaseStorage implements IStorage {
     }
     
     return notification;
+  }
+
+  // Category operations
+  async getUserCategories(userId: string): Promise<UserCategory[]> {
+    return await db
+      .select()
+      .from(userCategories)
+      .where(eq(userCategories.userId, userId));
+  }
+
+  async addUserCategory(userId: string, category: CategoryType): Promise<UserCategory> {
+    // Check if already exists
+    const existing = await db
+      .select()
+      .from(userCategories)
+      .where(and(
+        eq(userCategories.userId, userId),
+        eq(userCategories.category, category)
+      ));
+    
+    if (existing.length > 0) {
+      return existing[0];
+    }
+
+    const [newCategory] = await db
+      .insert(userCategories)
+      .values({ userId, category })
+      .returning();
+    
+    return newCategory;
+  }
+
+  async removeUserCategory(userId: string, category: CategoryType): Promise<void> {
+    await db
+      .delete(userCategories)
+      .where(and(
+        eq(userCategories.userId, userId),
+        eq(userCategories.category, category)
+      ));
+  }
+
+  async getUsersByCategory(category: CategoryType): Promise<User[]> {
+    const categoryUsers = await db
+      .select()
+      .from(userCategories)
+      .where(eq(userCategories.category, category));
+    
+    if (categoryUsers.length === 0) return [];
+    
+    const userIds = categoryUsers.map(uc => uc.userId);
+    return await db
+      .select()
+      .from(users)
+      .where(inArray(users.id, userIds))
+      .orderBy(users.firstName, users.lastName);
+  }
+
+  async getManagersByCategory(category: CategoryType): Promise<User[]> {
+    const categoryUsers = await db
+      .select()
+      .from(userCategories)
+      .where(eq(userCategories.category, category));
+    
+    if (categoryUsers.length === 0) return [];
+    
+    const userIds = categoryUsers.map(uc => uc.userId);
+    return await db
+      .select()
+      .from(users)
+      .where(and(
+        inArray(users.id, userIds),
+        inArray(users.role, ['manager', 'admin'])
+      ))
+      .orderBy(users.firstName, users.lastName);
+  }
+
+  async getEmployeesForManager(managerId: string): Promise<User[]> {
+    // Get manager's categories
+    const managerCategories = await this.getUserCategories(managerId);
+    if (managerCategories.length === 0) return [];
+    
+    const categories = managerCategories.map(mc => mc.category);
+    
+    // Get all users in those categories
+    const categoryUsers = await db
+      .select()
+      .from(userCategories)
+      .where(inArray(userCategories.category, categories));
+    
+    if (categoryUsers.length === 0) return [];
+    
+    const userIds = Array.from(new Set(categoryUsers.map(uc => uc.userId)));
+    
+    // Return employees (not including the manager themselves)
+    return await db
+      .select()
+      .from(users)
+      .where(and(
+        inArray(users.id, userIds),
+        not(eq(users.id, managerId)),
+        eq(users.role, 'employee')
+      ))
+      .orderBy(users.firstName, users.lastName);
+  }
+
+  // Time entry approval operations
+  async createTimeEntryApproval(timeEntryId: number): Promise<TimeEntryApproval> {
+    const [approval] = await db
+      .insert(timeEntryApprovals)
+      .values({ timeEntryId })
+      .returning();
+    
+    return approval;
+  }
+
+  async getTimeEntryApproval(timeEntryId: number): Promise<TimeEntryApproval | undefined> {
+    const [approval] = await db
+      .select()
+      .from(timeEntryApprovals)
+      .where(eq(timeEntryApprovals.timeEntryId, timeEntryId));
+    
+    return approval;
+  }
+
+  async updateTimeEntryApproval(id: number, updates: { status: TimeEntryApprovalStatus; reviewedBy: string; notes?: string }): Promise<TimeEntryApproval> {
+    const [approval] = await db
+      .update(timeEntryApprovals)
+      .set({
+        status: updates.status,
+        reviewedBy: updates.reviewedBy,
+        reviewedAt: new Date(),
+        notes: updates.notes || null,
+      })
+      .where(eq(timeEntryApprovals.id, id))
+      .returning();
+    
+    if (!approval) {
+      throw new Error("Time entry approval not found");
+    }
+    
+    return approval;
+  }
+
+  async getPendingApprovalsForManager(managerId: string): Promise<{ approval: TimeEntryApproval; entry: TimeEntry; user: User }[]> {
+    // Get employees this manager oversees
+    const employees = await this.getEmployeesForManager(managerId);
+    if (employees.length === 0) return [];
+    
+    const employeeIds = employees.map(e => e.id);
+    
+    // Get pending approvals for those employees
+    const pendingApprovals = await db
+      .select()
+      .from(timeEntryApprovals)
+      .where(eq(timeEntryApprovals.status, 'pending'));
+    
+    const results: { approval: TimeEntryApproval; entry: TimeEntry; user: User }[] = [];
+    
+    for (const approval of pendingApprovals) {
+      const entry = await this.getTimeEntry(approval.timeEntryId);
+      if (entry && employeeIds.includes(entry.userId)) {
+        const user = employees.find(e => e.id === entry.userId);
+        if (user) {
+          results.push({ approval, entry, user });
+        }
+      }
+    }
+    
+    return results;
+  }
+
+  async getPendingApprovalsForDate(date: Date): Promise<{ approval: TimeEntryApproval; entry: TimeEntry; user: User }[]> {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+    
+    // Get time entries for that date
+    const entries = await db
+      .select()
+      .from(timeEntries)
+      .where(and(
+        gte(timeEntries.clockIn, startOfDay),
+        lte(timeEntries.clockIn, endOfDay)
+      ));
+    
+    const results: { approval: TimeEntryApproval; entry: TimeEntry; user: User }[] = [];
+    
+    for (const entry of entries) {
+      const approval = await this.getTimeEntryApproval(entry.id);
+      if (approval && approval.status === 'pending') {
+        const user = await this.getUser(entry.userId);
+        if (user) {
+          results.push({ approval, entry, user });
+        }
+      }
+    }
+    
+    return results;
+  }
+
+  async hasUnapprovedPreviousDayEntry(userId: string): Promise<boolean> {
+    // Get yesterday's date (skip weekends)
+    const today = new Date();
+    const previousBusinessDay = new Date(today);
+    
+    // Go back to previous business day
+    do {
+      previousBusinessDay.setDate(previousBusinessDay.getDate() - 1);
+    } while (previousBusinessDay.getDay() === 0 || previousBusinessDay.getDay() === 6);
+    
+    const startOfPrevDay = new Date(previousBusinessDay);
+    startOfPrevDay.setHours(0, 0, 0, 0);
+    const endOfPrevDay = new Date(previousBusinessDay);
+    endOfPrevDay.setHours(23, 59, 59, 999);
+    
+    // Get time entries for previous business day
+    const entries = await db
+      .select()
+      .from(timeEntries)
+      .where(and(
+        eq(timeEntries.userId, userId),
+        gte(timeEntries.clockIn, startOfPrevDay),
+        lte(timeEntries.clockIn, endOfPrevDay),
+        not(isNull(timeEntries.clockOut))
+      ));
+    
+    // Check if any have unapproved status
+    for (const entry of entries) {
+      const approval = await this.getTimeEntryApproval(entry.id);
+      if (approval && approval.status === 'pending') {
+        return true;
+      }
+    }
+    
+    return false;
   }
 }
 

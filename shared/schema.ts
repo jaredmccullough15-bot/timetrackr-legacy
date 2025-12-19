@@ -20,6 +20,12 @@ export const userRoleEnum = pgEnum('user_role', ['employee', 'manager', 'admin']
 // PTO request status enum
 export const ptoRequestStatusEnum = pgEnum('pto_request_status', ['pending', 'approved', 'denied']);
 
+// Time entry approval status enum
+export const timeEntryApprovalStatusEnum = pgEnum('time_entry_approval_status', ['pending', 'approved', 'rejected']);
+
+// Category enum for Pete/Quincy assignment
+export const categoryTypeEnum = pgEnum('category_type', ['pete', 'quincy']);
+
 // Session storage table - Required for Replit Auth
 export const sessions = pgTable(
   "sessions",
@@ -161,6 +167,57 @@ export const breakNotificationsRelations = relations(breakNotifications, ({ one 
   }),
 }));
 
+// User categories table - assigns users to Pete and/or Quincy categories
+export const userCategories = pgTable(
+  "user_categories",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+    category: categoryTypeEnum("category").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("IDX_user_categories_user_id").on(table.userId),
+    index("IDX_user_categories_category").on(table.category),
+  ]
+);
+
+export const userCategoriesRelations = relations(userCategories, ({ one }) => ({
+  user: one(users, {
+    fields: [userCategories.userId],
+    references: [users.id],
+  }),
+}));
+
+// Time entry approvals table - tracks manager approval of time punches
+export const timeEntryApprovals = pgTable(
+  "time_entry_approvals",
+  {
+    id: integer("id").primaryKey().generatedAlwaysAsIdentity(),
+    timeEntryId: integer("time_entry_id").notNull().references(() => timeEntries.id, { onDelete: 'cascade' }),
+    status: timeEntryApprovalStatusEnum("status").default('pending').notNull(),
+    reviewedBy: varchar("reviewed_by").references(() => users.id),
+    reviewedAt: timestamp("reviewed_at"),
+    notes: varchar("notes"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("IDX_time_entry_approvals_time_entry_id").on(table.timeEntryId),
+    index("IDX_time_entry_approvals_status").on(table.status),
+  ]
+);
+
+export const timeEntryApprovalsRelations = relations(timeEntryApprovals, ({ one }) => ({
+  timeEntry: one(timeEntries, {
+    fields: [timeEntryApprovals.timeEntryId],
+    references: [timeEntries.id],
+  }),
+  reviewer: one(users, {
+    fields: [timeEntryApprovals.reviewedBy],
+    references: [users.id],
+  }),
+}));
+
 // Zod schemas for validation
 export const upsertUserSchema = createInsertSchema(users).pick({
   id: true,
@@ -254,3 +311,27 @@ export type StartBreak = z.infer<typeof startBreakSchema>;
 export type EndBreak = z.infer<typeof endBreakSchema>;
 export type BreakNotification = typeof breakNotifications.$inferSelect;
 export type InsertBreakNotification = typeof breakNotifications.$inferInsert;
+
+// Category types
+export type UserCategory = typeof userCategories.$inferSelect;
+export type InsertUserCategory = typeof userCategories.$inferInsert;
+export type CategoryType = 'pete' | 'quincy';
+
+// Time entry approval types
+export type TimeEntryApproval = typeof timeEntryApprovals.$inferSelect;
+export type InsertTimeEntryApproval = typeof timeEntryApprovals.$inferInsert;
+export type TimeEntryApprovalStatus = 'pending' | 'approved' | 'rejected';
+
+// Category schemas
+export const assignCategorySchema = z.object({
+  category: z.enum(['pete', 'quincy']),
+});
+
+// Time entry approval schemas
+export const reviewTimeEntrySchema = z.object({
+  status: z.enum(['approved', 'rejected']),
+  notes: z.string().optional(),
+});
+
+export type AssignCategory = z.infer<typeof assignCategorySchema>;
+export type ReviewTimeEntry = z.infer<typeof reviewTimeEntrySchema>;

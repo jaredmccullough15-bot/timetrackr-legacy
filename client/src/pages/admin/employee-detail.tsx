@@ -27,9 +27,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { TimeEntryModal } from "@/components/TimeEntryModal";
-import { ArrowLeft, Plus, Edit, Trash2, DollarSign, Heart, Clock, Shield, UserX, Coffee } from "lucide-react";
+import { ArrowLeft, Plus, Edit, Trash2, DollarSign, Heart, Clock, Shield, UserX, Coffee, Users } from "lucide-react";
 import { formatDuration, formatDateTime, formatCurrency } from "@/lib/timeUtils";
-import type { TimeEntry, Break } from "@shared/schema";
+import type { TimeEntry, Break, Category } from "@shared/schema";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
@@ -76,6 +77,7 @@ export default function EmployeeDetail() {
   const [showRoleDialog, setShowRoleDialog] = useState(false);
   const [selectedRole, setSelectedRole] = useState<'employee' | 'manager' | 'admin'>('employee');
   const [showDeleteEmployeeDialog, setShowDeleteEmployeeDialog] = useState(false);
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
 
   const employeeId = params.id;
 
@@ -101,6 +103,53 @@ export default function EmployeeDetail() {
     queryKey: [`/api/employees/${employeeId}/breaks`],
     enabled: !!(currentUser?.role === 'admin' || currentUser?.role === 'manager') && !!employeeId,
   });
+
+  const { data: allCategories = [] } = useQuery<Category[]>({
+    queryKey: ["/api/categories"],
+    enabled: !!(currentUser?.role === 'admin' || currentUser?.role === 'manager'),
+  });
+
+  const { data: userCategories = [] } = useQuery<Category[]>({
+    queryKey: ["/api/users", employeeId, "categories"],
+    enabled: !!(currentUser?.role === 'admin' || currentUser?.role === 'manager') && !!employeeId,
+  });
+
+  useEffect(() => {
+    if (userCategories.length > 0) {
+      setSelectedCategories(userCategories.map(c => c.name));
+    } else {
+      setSelectedCategories([]);
+    }
+  }, [userCategories]);
+
+  const updateCategoriesMutation = useMutation({
+    mutationFn: async ({ categories }: { categories: string[] }) => {
+      await apiRequest("PUT", `/api/users/${employeeId}/categories`, { categories });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users", employeeId, "categories"] });
+      toast({
+        title: "Success",
+        description: "Categories updated successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update categories.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCategoryToggle = (categoryName: string) => {
+    const newCategories = selectedCategories.includes(categoryName)
+      ? selectedCategories.filter(c => c !== categoryName)
+      : [...selectedCategories, categoryName];
+    
+    setSelectedCategories(newCategories);
+    updateCategoriesMutation.mutate({ categories: newCategories });
+  };
 
   const deleteMutation = useMutation({
     mutationFn: async (entryId: number) => {
@@ -282,6 +331,37 @@ export default function EmployeeDetail() {
                 <span>Sick Time</span>
               </div>
               <div className="font-semibold">{formatDuration(parseFloat(employee.user.sickTimeBalance || '0'))}</div>
+            </div>
+            <div className="pt-4 border-t mt-4">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
+                <Users className="w-4 h-4" />
+                <span>Assigned Categories</span>
+              </div>
+              <div className="space-y-2">
+                {allCategories.map((category) => (
+                  <div key={category.id} className="flex items-center gap-2">
+                    <Checkbox
+                      id={`category-${category.id}`}
+                      checked={selectedCategories.includes(category.name)}
+                      onCheckedChange={() => handleCategoryToggle(category.name)}
+                      disabled={updateCategoriesMutation.isPending}
+                      data-testid={`checkbox-category-${category.name.toLowerCase()}`}
+                    />
+                    <Label 
+                      htmlFor={`category-${category.id}`}
+                      className="text-sm cursor-pointer"
+                    >
+                      {category.name}
+                    </Label>
+                    {selectedCategories.includes(category.name) && (
+                      <Badge variant="outline" className="text-xs">Assigned</Badge>
+                    )}
+                  </div>
+                ))}
+                {allCategories.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No categories available</p>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>

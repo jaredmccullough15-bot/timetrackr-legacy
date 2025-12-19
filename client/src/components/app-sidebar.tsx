@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, FileText, MessageSquare, LogOut, CalendarDays } from "lucide-react";
+import { LayoutDashboard, Users, FileText, MessageSquare, LogOut, CalendarDays, CheckCircle } from "lucide-react";
 import { useLocation } from "wouter";
 import {
   Sidebar,
@@ -40,6 +40,12 @@ const menuItems = [
     url: "/admin/pto-calendar",
     icon: CalendarDays,
     testId: "nav-pto-calendar",
+  },
+  {
+    title: "Punch Approvals",
+    url: "/admin/punch-approvals",
+    icon: CheckCircle,
+    testId: "nav-punch-approvals",
   },
   {
     title: "Reports",

@@ -207,3 +207,64 @@ export async function sendWeeklyTimesheetReport(
     }
   }
 }
+
+export interface PendingPunchData {
+  employeeName: string;
+  clockIn: string;
+  clockOut: string;
+  hours: string;
+}
+
+export async function sendPunchApprovalNotification(
+  managerEmail: string,
+  managerName: string,
+  dateStr: string,
+  pendingPunches: PendingPunchData[]
+): Promise<void> {
+  if (!managerEmail) {
+    console.log('Manager has no email address, skipping punch approval notification');
+    return;
+  }
+
+  const subject = `Time Punch Approval Required - ${dateStr}`;
+  
+  const punchRows = pendingPunches
+    .map(punch => `
+      <tr>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${punch.employeeName}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${punch.clockIn}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb;">${punch.clockOut}</td>
+        <td style="padding: 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${punch.hours}</td>
+      </tr>
+    `)
+    .join('');
+  
+  const body = `
+    <html>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+        <h2>Time Punch Approval Required</h2>
+        <p>Hi ${managerName},</p>
+        <p>The following time punches from <strong>${dateStr}</strong> require your approval:</p>
+        <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+          <thead>
+            <tr style="background-color: #f3f4f6;">
+              <th style="padding: 12px 8px; text-align: left; border-bottom: 2px solid #d1d5db;">Employee</th>
+              <th style="padding: 12px 8px; text-align: left; border-bottom: 2px solid #d1d5db;">Clock In</th>
+              <th style="padding: 12px 8px; text-align: left; border-bottom: 2px solid #d1d5db;">Clock Out</th>
+              <th style="padding: 12px 8px; text-align: right; border-bottom: 2px solid #d1d5db;">Hours</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${punchRows}
+          </tbody>
+        </table>
+        <p style="margin-top: 20px;">
+          <strong>Important:</strong> Employees cannot clock in today until their previous day's time punch is approved. 
+          Please log in to the time clock system to review and approve or reject these punches.
+        </p>
+      </body>
+    </html>
+  `;
+
+  await sendEmail({ to: managerEmail, subject, body });
+}

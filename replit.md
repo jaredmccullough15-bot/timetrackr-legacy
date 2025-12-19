@@ -63,6 +63,11 @@ Preferred communication style: Simple, everyday language.
 - `/api/breaks/active` - Get active break for timer display (employee)
 - `/api/break-notifications` - Get break overtime notifications (admin/manager)
 - `/api/reports` - Payroll and time reports (admin/manager access)
+- `/api/categories` - Get all categories (GET, admin/manager)
+- `/api/users/:id/categories` - Get/update user categories (GET/PUT, admin/manager)
+- `/api/time-entry-approvals/pending` - Get pending time punch approvals (GET, admin/manager)
+- `/api/time-entry-approvals/check` - Check if current user has unapproved entries (GET, employee)
+- `/api/time-entry-approvals/:id` - Update approval status (PATCH, admin/manager)
 
 **Business Logic:**
 - **Quarter-hour rounding on clock-in:**
@@ -83,6 +88,18 @@ Preferred communication style: Simple, everyday language.
   - **Unapproval feature:** Managers/admins can revoke approved PTO, returning hours to employee's balance
   - **Conflict detection:** When reviewing a PTO request, the system shows other employees with approved PTO during the same dates
   - **PTO Calendar:** Visual monthly calendar showing all approved time off across the team
+  - **Category-based routing:** PTO notifications are sent to managers in the same category (Pete/Quincy) as the employee
+- **Category system (Pete/Quincy):**
+  - Employees and managers can be assigned to one or both categories
+  - Categories determine which managers handle which employees' PTO requests
+  - Falls back to notifying all admins/managers if no category match exists
+  - Categories are managed from the Employee Detail page
+- **Daily punch approval workflow:**
+  - Time entry approvals are created automatically when employees clock out
+  - Managers receive email at 8:00 AM EST (weekdays only) listing pending punches from previous business day
+  - Employees with unapproved previous day entries are BLOCKED from clocking in
+  - Blocked employees see a warning banner and must see their manager for approval
+  - Managers approve/deny punches from the Punch Approvals page in the sidebar
 - Weekly hour calculations with configurable date ranges
 - Pay rate and PTO balance management per employee
 - Real-time clock status tracking
@@ -140,10 +157,33 @@ Preferred communication style: Simple, everyday language.
    - Stores serialized session data
    - TTL-based expiration with index on expire column
 
+7. **categories table** - Employee/Manager category groupings (Pete/Quincy)
+   - id: serial primary key
+   - name: unique category name (e.g., "Pete", "Quincy")
+   - Indexed by name for efficient lookups
+
+8. **userCategories table** - Join table linking users to categories
+   - userId: foreign key to users
+   - categoryId: foreign key to categories
+   - Composite primary key on (userId, categoryId)
+   - Enables many-to-many relationship between users and categories
+
+9. **timeEntryApprovals table** - Daily punch approval workflow
+   - id: serial primary key
+   - timeEntryId: foreign key to timeEntries
+   - status: pending/approved/denied (default: pending)
+   - reviewedBy: nullable foreign key to reviewing manager/admin
+   - reviewedAt: nullable timestamp
+   - notes: optional review notes
+   - createdAt: timestamp
+   - Indexed by status and reviewedBy for efficient queries
+
 **Data Relationships:**
 - One-to-many: User → TimeEntries
 - One-to-many: User → Breaks
 - One-to-many: Break → BreakNotifications
+- Many-to-many: User ↔ Category (via userCategories)
+- One-to-one: TimeEntry → TimeEntryApproval
 - Automatic cleanup of time entries, breaks, and notifications when user is deleted
 
 ### Authentication & Authorization

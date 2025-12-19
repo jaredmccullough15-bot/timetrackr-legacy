@@ -17,7 +17,10 @@ import {
   pinLoginSchema,
   createPtoRequestSchema,
   reviewPtoRequestSchema,
-  updatePtoBalanceSchema
+  updatePtoBalanceSchema,
+  assignCategorySchema,
+  reviewTimeEntrySchema,
+  type CategoryType
 } from "@shared/schema";
 import { startOfWeek, endOfWeek } from "date-fns";
 import bcrypt from "bcryptjs";
@@ -120,6 +123,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Already clocked in" });
       }
 
+      // Check if employee has unapproved previous day entry (blocks clock-in)
+      const hasUnapproved = await storage.hasUnapprovedPreviousDayEntry(userId);
+      if (hasUnapproved) {
+        return res.status(403).json({ 
+          message: "Your previous day's time punch has not been approved. Please see your manager for manual entry.",
+          blocked: true
+        });
+      }
+
       // Round clock-in time to nearest quarter hour
       const roundedClockIn = roundToNearestQuarterHour(new Date(validatedData.clockIn));
 
@@ -174,19 +186,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         clockOut: clockOutTime,
       });
 
-      // Calculate hours worked (after any break deductions)
-      const hoursWorked = (updatedEntry.clockOut!.getTime() - updatedEntry.clockIn.getTime()) / (1000 * 60 * 60);
-      
-      // Calculate sick time accrual (1 hour per 30 hours worked)
-      const sickTimeEarned = hoursWorked / 30;
-      
-      // Update user's sick time balance
-      const user = await storage.getUser(userId);
-      if (user) {
-        const currentSickTime = parseFloat(user.sickTimeBalance || '0');
-        const newSickTime = currentSickTime + sickTimeEarned;
-        await storage.updateUserSickTime(userId, newSickTime.toFixed(2));
-      }
+      // Create a pending approval record for this time entry
+      await storage.createTimeEntryApproval(updatedEntry.id);
+
+      // Sick time accrual is DISABLED - managed manually and reset yearly
 
       res.json(updatedEntry);
     } catch (error: any) {
@@ -652,13 +655,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: 'pending',
       });
       
-      // Send email notifications to managers and admins
+      // Send email notifications to managers in the same category (or all admins as fallback)
       try {
-        const allUsers = await storage.getAllUsers();
-        const managerEmails = allUsers
-          .filter(u => u.role === 'admin' || u.role === 'manager')
-          .map(u => u.email)
-          .filter((email): email is string => !!email);
+        // Get employee's categories
+        const employeeCategories = await storage.getUserCategories(userId);
+        let managerEmails: string[] = [];
+        
+        if (employeeCategories.length > 0) {
+          // Get managers in the same categories as the employee
+          for (const cat of employeeCategories) {
+            const categoryManagers = await storage.getManagersByCategory(cat.category);
+            for (const manager of categoryManagers) {
+              if (manager.email && !managerEmails.includes(manager.email)) {
+                managerEmails.push(manager.email);
+              }
+            }
+          }
+        }
+        
+        // If no category-based managers found, fall back to all admins and managers
+        if (managerEmails.length === 0) {
+          const allUsers = await storage.getAllUsers();
+          managerEmails = allUsers
+            .filter(u => u.role === 'admin' || u.role === 'manager')
+            .map(u => u.email)
+            .filter((email): email is string => !!email);
+        }
         
         const employeeName = `${user.firstName} ${user.lastName}`;
         const startDate = new Date(validatedData.startDate).toLocaleDateString('en-US', { timeZone: 'UTC' });
@@ -1048,6 +1070,211 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error running yearly balance reset:", error);
       res.status(500).json({ message: error.message || "Failed to run yearly balance reset" });
+    }
+  });
+
+  // ==================== CATEGORY MANAGEMENT ENDPOINTS ====================
+
+  // Get user's categories
+  app.get('/api/users/:id/categories', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const targetUserId = req.params.id;
+      const currentUser = await storage.getUser(userId);
+      
+      // Users can view their own categories, admins can view any
+      if (targetUserId !== userId && !isAdminOrManager(currentUser)) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+      
+      const categories = await storage.getUserCategories(targetUserId);
+      res.json(categories);
+    } catch (error: any) {
+      console.error("Error fetching user categories:", error);
+      res.status(500).json({ message: "Failed to fetch user categories" });
+    }
+  });
+
+  // Add category to user - admin only
+  app.post('/api/users/:id/categories', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const targetUserId = req.params.id;
+      const currentUser = await storage.getUser(userId);
+      
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Forbidden: Admin access required" });
+      }
+      
+      const validatedData = assignCategorySchema.parse(req.body);
+      const category = await storage.addUserCategory(targetUserId, validatedData.category as CategoryType);
+      
+      res.json(category);
+    } catch (error: any) {
+      console.error("Error adding user category:", error);
+      res.status(400).json({ message: error.message || "Failed to add category" });
+    }
+  });
+
+  // Remove category from user - admin only
+  app.delete('/api/users/:id/categories/:category', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const targetUserId = req.params.id;
+      const category = req.params.category as CategoryType;
+      const currentUser = await storage.getUser(userId);
+      
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Forbidden: Admin access required" });
+      }
+      
+      if (category !== 'pete' && category !== 'quincy') {
+        return res.status(400).json({ message: "Invalid category" });
+      }
+      
+      await storage.removeUserCategory(targetUserId, category);
+      
+      res.json({ success: true, message: "Category removed" });
+    } catch (error: any) {
+      console.error("Error removing user category:", error);
+      res.status(400).json({ message: error.message || "Failed to remove category" });
+    }
+  });
+
+  // Get employees for current manager (filtered by shared categories)
+  app.get('/api/manager/employees', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+      
+      if (!isAdminOrManager(currentUser)) {
+        return res.status(403).json({ message: "Forbidden: Manager or Admin access required" });
+      }
+      
+      const employees = await storage.getEmployeesForManager(userId);
+      res.json(employees);
+    } catch (error: any) {
+      console.error("Error fetching manager's employees:", error);
+      res.status(500).json({ message: "Failed to fetch employees" });
+    }
+  });
+
+  // ==================== TIME PUNCH APPROVAL ENDPOINTS ====================
+
+  // Get pending approvals for manager
+  app.get('/api/time-entry-approvals/pending', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+      
+      if (!isAdminOrManager(currentUser)) {
+        return res.status(403).json({ message: "Forbidden: Manager or Admin access required" });
+      }
+      
+      const pendingApprovals = await storage.getPendingApprovalsForManager(userId);
+      res.json(pendingApprovals);
+    } catch (error: any) {
+      console.error("Error fetching pending approvals:", error);
+      res.status(500).json({ message: "Failed to fetch pending approvals" });
+    }
+  });
+
+  // Get approval status for a time entry
+  app.get('/api/time-entries/:id/approval', isAuthenticated, async (req: any, res) => {
+    try {
+      const timeEntryId = parseInt(req.params.id);
+      const approval = await storage.getTimeEntryApproval(timeEntryId);
+      res.json(approval || null);
+    } catch (error: any) {
+      console.error("Error fetching time entry approval:", error);
+      res.status(500).json({ message: "Failed to fetch approval status" });
+    }
+  });
+
+  // Approve or reject a time entry - manager/admin only
+  app.post('/api/time-entry-approvals/:id/review', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const approvalId = parseInt(req.params.id);
+      const currentUser = await storage.getUser(userId);
+      
+      if (!isAdminOrManager(currentUser)) {
+        return res.status(403).json({ message: "Forbidden: Manager or Admin access required" });
+      }
+      
+      const validatedData = reviewTimeEntrySchema.parse(req.body);
+      
+      const approval = await storage.updateTimeEntryApproval(approvalId, {
+        status: validatedData.status,
+        reviewedBy: userId,
+        notes: validatedData.notes,
+      });
+      
+      res.json(approval);
+    } catch (error: any) {
+      console.error("Error reviewing time entry:", error);
+      res.status(400).json({ message: error.message || "Failed to review time entry" });
+    }
+  });
+
+  // Check if employee can clock in (no unapproved previous day entries)
+  app.get('/api/time-entries/can-clock-in', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      const hasUnapproved = await storage.hasUnapprovedPreviousDayEntry(userId);
+      
+      res.json({ 
+        canClockIn: !hasUnapproved,
+        blockedReason: hasUnapproved 
+          ? "Your previous day's time punch has not been approved. Please see your manager for manual entry."
+          : null
+      });
+    } catch (error: any) {
+      console.error("Error checking clock-in eligibility:", error);
+      res.status(500).json({ message: "Failed to check clock-in eligibility" });
+    }
+  });
+
+  // Check if current user has unapproved entries (for employee dashboard)
+  app.get('/api/time-entry-approvals/check', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const hasUnapproved = await storage.hasUnapprovedPreviousDayEntry(userId);
+      res.json({ hasUnapprovedEntries: hasUnapproved });
+    } catch (error: any) {
+      console.error("Error checking approval status:", error);
+      res.status(500).json({ message: "Failed to check approval status" });
+    }
+  });
+
+  // PATCH endpoint for updating time entry approval status
+  app.patch('/api/time-entry-approvals/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const approvalId = parseInt(req.params.id);
+      const currentUser = await storage.getUser(userId);
+      
+      if (!isAdminOrManager(currentUser)) {
+        return res.status(403).json({ message: "Forbidden: Manager or Admin access required" });
+      }
+      
+      const { status, notes } = req.body;
+      
+      if (!status || !['approved', 'rejected'].includes(status)) {
+        return res.status(400).json({ message: "Invalid status. Must be 'approved' or 'rejected'" });
+      }
+      
+      const approval = await storage.updateTimeEntryApproval(approvalId, {
+        status,
+        reviewedBy: userId,
+        notes,
+      });
+      
+      res.json(approval);
+    } catch (error: any) {
+      console.error("Error updating time entry approval:", error);
+      res.status(400).json({ message: error.message || "Failed to update approval" });
     }
   });
 

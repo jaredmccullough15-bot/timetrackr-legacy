@@ -13,9 +13,10 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { StatCard } from "@/components/StatCard";
 import { ClockStatusBadge } from "@/components/ClockStatusBadge";
-import { Clock, DollarSign, Heart, TrendingUp, LogOut, Calendar, Coffee } from "lucide-react";
+import { Clock, DollarSign, Heart, TrendingUp, LogOut, Calendar, Coffee, AlertTriangle } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { formatCurrency, formatDateTime, formatDuration, getWeekBounds } from "@/lib/timeUtils";
-import type { TimeEntry, PtoRequest, Break } from "@shared/schema";
+import type { TimeEntry, PtoRequest, Break, TimeEntryApproval } from "@shared/schema";
 
 export default function EmployeeDashboard() {
   const { user, isLoading: authLoading } = useAuth();
@@ -52,6 +53,13 @@ export default function EmployeeDashboard() {
     enabled: !!user,
     refetchInterval: 1000, // Refetch every second to update timer
   });
+
+  const { data: pendingApprovalCheck } = useQuery<{ hasUnapprovedEntries: boolean }>({
+    queryKey: ["/api/time-entry-approvals/check"],
+    enabled: !!user,
+  });
+
+  const hasUnapprovedEntries = pendingApprovalCheck?.hasUnapprovedEntries || false;
 
   const clockInMutation = useMutation({
     mutationFn: async () => {
@@ -330,6 +338,16 @@ export default function EmployeeDashboard() {
       </header>
 
       <main className="container mx-auto px-4 py-8 max-w-2xl space-y-8">
+        {hasUnapprovedEntries && !isClockedIn && (
+          <Alert variant="destructive" data-testid="alert-unapproved-entries">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Clock-In Blocked</AlertTitle>
+            <AlertDescription>
+              Your previous day's time entry has not been approved yet. Please see your manager to get it approved before clocking in.
+            </AlertDescription>
+          </Alert>
+        )}
+
         <Card className="text-center">
           <CardHeader className="pb-4">
             <div className="flex items-center justify-center gap-2 mb-2">
