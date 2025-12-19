@@ -29,7 +29,12 @@ import {
 import { TimeEntryModal } from "@/components/TimeEntryModal";
 import { ArrowLeft, Plus, Edit, Trash2, DollarSign, Heart, Clock, Shield, UserX, Coffee, Users } from "lucide-react";
 import { formatDuration, formatDateTime, formatCurrency } from "@/lib/timeUtils";
-import type { TimeEntry, Break, Category } from "@shared/schema";
+import type { TimeEntry, Break, UserCategory } from "@shared/schema";
+
+interface Category {
+  id: number;
+  name: string;
+}
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -109,17 +114,14 @@ export default function EmployeeDetail() {
     enabled: !!(currentUser?.role === 'admin' || currentUser?.role === 'manager'),
   });
 
-  const { data: userCategories = [] } = useQuery<Category[]>({
+  const { data: userCategories = [] } = useQuery<UserCategory[]>({
     queryKey: ["/api/users", employeeId, "categories"],
     enabled: !!(currentUser?.role === 'admin' || currentUser?.role === 'manager') && !!employeeId,
   });
 
   useEffect(() => {
-    if (userCategories.length > 0) {
-      setSelectedCategories(userCategories.map(c => c.name));
-    } else {
-      setSelectedCategories([]);
-    }
+    const categoryNames = userCategories.map(c => c.category);
+    setSelectedCategories(categoryNames);
   }, [userCategories]);
 
   const updateCategoriesMutation = useMutation({

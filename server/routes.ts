@@ -1075,6 +1075,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ==================== CATEGORY MANAGEMENT ENDPOINTS ====================
 
+  // Get all available categories
+  app.get('/api/categories', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+      
+      if (!isAdminOrManager(currentUser)) {
+        return res.status(403).json({ message: "Forbidden: Manager or Admin access required" });
+      }
+      
+      // Return the available categories
+      res.json([
+        { id: 1, name: 'pete' },
+        { id: 2, name: 'quincy' }
+      ]);
+    } catch (error: any) {
+      console.error("Error fetching categories:", error);
+      res.status(500).json({ message: "Failed to fetch categories" });
+    }
+  });
+
   // Get user's categories
   app.get('/api/users/:id/categories', isAuthenticated, async (req: any, res) => {
     try {
@@ -1113,6 +1134,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Error adding user category:", error);
       res.status(400).json({ message: error.message || "Failed to add category" });
+    }
+  });
+
+  // Update user's categories (bulk replace) - admin only
+  app.put('/api/users/:id/categories', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const targetUserId = req.params.id;
+      const currentUser = await storage.getUser(userId);
+      
+      if (currentUser?.role !== 'admin') {
+        return res.status(403).json({ message: "Forbidden: Admin access required" });
+      }
+      
+      const { categories } = req.body;
+      if (!Array.isArray(categories)) {
+        return res.status(400).json({ message: "Categories must be an array" });
+      }
+      
+      // Validate categories
+      const validCategories = ['pete', 'quincy'];
+      for (const cat of categories) {
+        if (!validCategories.includes(cat)) {
+          return res.status(400).json({ message: `Invalid category: ${cat}` });
+        }
+      }
+      
+      // Get current categories
+      const currentCategories = await storage.getUserCategories(targetUserId);
+      const currentCategoryNames = currentCategories.map(c => c.category);
+      
+      // Remove categories that are no longer selected
+      for (const cat of currentCategoryNames) {
+        if (!categories.includes(cat)) {
+          await storage.removeUserCategory(targetUserId, cat as CategoryType);
+        }
+      }
+      
+      // Add new categories
+      for (const cat of categories) {
+        if (!currentCategoryNames.includes(cat)) {
+          await storage.addUserCategory(targetUserId, cat as CategoryType);
+        }
+      }
+      
+      const updatedCategories = await storage.getUserCategories(targetUserId);
+      res.json(updatedCategories);
+    } catch (error: any) {
+      console.error("Error updating user categories:", error);
+      res.status(400).json({ message: error.message || "Failed to update categories" });
     }
   });
 
