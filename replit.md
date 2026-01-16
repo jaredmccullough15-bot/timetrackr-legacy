@@ -96,10 +96,13 @@ Preferred communication style: Simple, everyday language.
   - Categories are managed from the Employee Detail page
 - **Daily punch approval workflow:**
   - Time entry approvals are created automatically when employees clock out
+  - **Approvals become visible to managers at 2:00 AM Eastern Time each day**
+  - Approvals created after 2:00 AM ET won't appear until the next day at 2:00 AM ET
+  - Uses timezone-aware logic (date-fns-tz) to handle EST/EDT transitions correctly
   - Managers receive email at 8:00 AM EST (weekdays only) listing pending punches from previous business day
-  - Employees with unapproved previous day entries are BLOCKED from clocking in
+  - Employees are only blocked from clocking in for approvals that are visible (created before 2:00 AM ET)
   - Blocked employees see a warning banner and must see their manager for approval
-  - Managers approve/deny punches from the Punch Approvals page in the sidebar
+  - Managers approve/reject punches from the Punch Approvals page in the sidebar
 - Weekly hour calculations with configurable date ranges
 - Pay rate and PTO balance management per employee
 - Real-time clock status tracking

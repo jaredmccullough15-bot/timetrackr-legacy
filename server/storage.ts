@@ -26,6 +26,27 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte, lte, isNull, not, desc, inArray } from "drizzle-orm";
+import { toZonedTime, fromZonedTime } from "date-fns-tz";
+
+const TIMEZONE = 'America/New_York';
+
+// Get 2:00 AM EST/EDT for today (or yesterday if before 2:00 AM)
+function getApprovalCutoffTime(): Date {
+  const now = new Date();
+  const nowInET = toZonedTime(now, TIMEZONE);
+  
+  // Set to 2:00 AM in Eastern Time zone
+  const cutoffInET = new Date(nowInET);
+  cutoffInET.setHours(2, 0, 0, 0);
+  
+  // If current time in ET is before 2:00 AM, use yesterday's 2:00 AM
+  if (nowInET < cutoffInET) {
+    cutoffInET.setDate(cutoffInET.getDate() - 1);
+  }
+  
+  // Convert back to UTC for database comparison
+  return fromZonedTime(cutoffInET, TIMEZONE);
+}
 
 export interface IStorage {
   // User operations
@@ -624,11 +645,18 @@ export class DatabaseStorage implements IStorage {
     
     const employeeIds = employees.map(e => e.id);
     
-    // Get pending approvals for those employees
+    // Get the cutoff time: 2:00 AM Eastern Time today
+    // Approvals created after this time won't be visible until tomorrow at 2:00 AM ET
+    const cutoffTime = getApprovalCutoffTime();
+    
+    // Get pending approvals for those employees created before the cutoff
     const pendingApprovals = await db
       .select()
       .from(timeEntryApprovals)
-      .where(eq(timeEntryApprovals.status, 'pending'));
+      .where(and(
+        eq(timeEntryApprovals.status, 'pending'),
+        lte(timeEntryApprovals.createdAt, cutoffTime)
+      ));
     
     const results: { approval: TimeEntryApproval; entry: TimeEntry; user: User }[] = [];
     
@@ -676,35 +704,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   async hasUnapprovedPreviousDayEntry(userId: string): Promise<boolean> {
-    // Get yesterday's date (skip weekends)
-    const today = new Date();
-    const previousBusinessDay = new Date(today);
+    // Get the cutoff time (2:00 AM ET today)
+    // Only check approvals that are visible (created before the cutoff)
+    const cutoffTime = getApprovalCutoffTime();
     
-    // Go back to previous business day
-    do {
-      previousBusinessDay.setDate(previousBusinessDay.getDate() - 1);
-    } while (previousBusinessDay.getDay() === 0 || previousBusinessDay.getDay() === 6);
-    
-    const startOfPrevDay = new Date(previousBusinessDay);
-    startOfPrevDay.setHours(0, 0, 0, 0);
-    const endOfPrevDay = new Date(previousBusinessDay);
-    endOfPrevDay.setHours(23, 59, 59, 999);
-    
-    // Get time entries for previous business day
-    const entries = await db
+    // Get all pending approvals for this user that were created before the cutoff
+    const pendingApprovals = await db
       .select()
-      .from(timeEntries)
+      .from(timeEntryApprovals)
       .where(and(
-        eq(timeEntries.userId, userId),
-        gte(timeEntries.clockIn, startOfPrevDay),
-        lte(timeEntries.clockIn, endOfPrevDay),
-        not(isNull(timeEntries.clockOut))
+        eq(timeEntryApprovals.status, 'pending'),
+        lte(timeEntryApprovals.createdAt, cutoffTime)
       ));
     
-    // Check if any have unapproved status
-    for (const entry of entries) {
-      const approval = await this.getTimeEntryApproval(entry.id);
-      if (approval && approval.status === 'pending') {
+    // Check if any of these approvals belong to this user
+    for (const approval of pendingApprovals) {
+      const entry = await this.getTimeEntry(approval.timeEntryId);
+      if (entry && entry.userId === userId) {
         return true;
       }
     }
