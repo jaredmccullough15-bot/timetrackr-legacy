@@ -92,8 +92,6 @@ Preferred communication style: Simple, everyday language.
 - **Category system (Pete/Quincy):**
   - Employees and managers can be assigned to one or both categories
   - Categories determine which managers handle which employees' PTO requests and punch approvals
-  - **Fallback behavior:** Employees without any category assigned are visible to ALL managers/admins
-  - This ensures new employees can be managed even before category assignment
   - Categories are managed from the Employee Detail page
 - **Daily punch approval workflow:**
   - Time entry approvals are created automatically when employees clock out
