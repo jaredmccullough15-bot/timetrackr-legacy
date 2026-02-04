@@ -574,30 +574,48 @@ export class DatabaseStorage implements IStorage {
   async getEmployeesForManager(managerId: string): Promise<User[]> {
     // Get manager's categories
     const managerCategories = await this.getUserCategories(managerId);
-    if (managerCategories.length === 0) return [];
     
-    const categories = managerCategories.map(mc => mc.category);
-    
-    // Get all users in those categories
-    const categoryUsers = await db
-      .select()
-      .from(userCategories)
-      .where(inArray(userCategories.category, categories));
-    
-    if (categoryUsers.length === 0) return [];
-    
-    const userIds = Array.from(new Set(categoryUsers.map(uc => uc.userId)));
-    
-    // Return employees (not including the manager themselves)
-    return await db
+    // Get all employees
+    const allEmployees = await db
       .select()
       .from(users)
       .where(and(
-        inArray(users.id, userIds),
         not(eq(users.id, managerId)),
         eq(users.role, 'employee')
       ))
       .orderBy(users.firstName, users.lastName);
+    
+    // Get all user category assignments
+    const allCategoryAssignments = await db
+      .select()
+      .from(userCategories);
+    
+    const userCategoryMap = new Map<string, string[]>();
+    for (const assignment of allCategoryAssignments) {
+      const existing = userCategoryMap.get(assignment.userId) || [];
+      existing.push(assignment.category);
+      userCategoryMap.set(assignment.userId, existing);
+    }
+    
+    const managerCategoryNames = managerCategories.map(mc => mc.category);
+    
+    // Filter employees: include those in manager's categories OR those without any categories (fallback)
+    return allEmployees.filter(employee => {
+      const employeeCategories = userCategoryMap.get(employee.id) || [];
+      
+      // Fallback: Employees without any category are visible to all managers/admins
+      if (employeeCategories.length === 0) {
+        return true;
+      }
+      
+      // If manager has no categories, they can only see uncategorized employees (handled above)
+      if (managerCategoryNames.length === 0) {
+        return false;
+      }
+      
+      // Check if employee shares any category with manager
+      return employeeCategories.some(cat => managerCategoryNames.includes(cat as "pete" | "quincy"));
+    });
   }
 
   // Time entry approval operations
