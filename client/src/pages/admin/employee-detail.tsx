@@ -27,7 +27,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { TimeEntryModal } from "@/components/TimeEntryModal";
-import { ArrowLeft, Plus, Edit, Trash2, DollarSign, Heart, Clock, Shield, UserX, Coffee, Users } from "lucide-react";
+import { ArrowLeft, Plus, Edit, Trash2, DollarSign, Heart, Clock, Shield, UserX, Coffee, Users, Pencil, Check, X } from "lucide-react";
 import { formatDuration, formatDateTime, formatCurrency } from "@/lib/timeUtils";
 import type { TimeEntry, Break, UserCategory } from "@shared/schema";
 
@@ -83,6 +83,10 @@ export default function EmployeeDetail() {
   const [selectedRole, setSelectedRole] = useState<'employee' | 'manager' | 'admin'>('employee');
   const [showDeleteEmployeeDialog, setShowDeleteEmployeeDialog] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
+  const [editingPayRate, setEditingPayRate] = useState(false);
+  const [payRateInput, setPayRateInput] = useState('');
+  const [editingSickTime, setEditingSickTime] = useState(false);
+  const [sickTimeInput, setSickTimeInput] = useState('');
 
   const employeeId = params.id;
 
@@ -123,6 +127,34 @@ export default function EmployeeDetail() {
     const categoryNames = userCategories.map(c => c.category);
     setSelectedCategories(categoryNames);
   }, [userCategories]);
+
+  const updatePayRateMutation = useMutation({
+    mutationFn: async ({ employeeId, payRate }: { employeeId: string; payRate: string }) => {
+      await apiRequest("PATCH", `/api/employees/${employeeId}/pay-rate`, { payRate });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      setEditingPayRate(false);
+      toast({ title: "Success", description: "Pay rate updated successfully." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to update pay rate.", variant: "destructive" });
+    },
+  });
+
+  const updateSickTimeMutation = useMutation({
+    mutationFn: async ({ employeeId, sickTimeBalance }: { employeeId: string; sickTimeBalance: string }) => {
+      await apiRequest("PATCH", `/api/employees/${employeeId}/sick-time`, { sickTimeBalance });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      setEditingSickTime(false);
+      toast({ title: "Success", description: "Sick time balance updated successfully." });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message || "Failed to update sick time balance.", variant: "destructive" });
+    },
+  });
 
   const updateCategoriesMutation = useMutation({
     mutationFn: async ({ categories }: { categories: string[] }) => {
@@ -312,12 +344,66 @@ export default function EmployeeDetail() {
               </div>
             )}
             {canViewFinancialData && (
-              <div className="flex items-center justify-between">
+              <div className="space-y-1">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <DollarSign className="w-4 h-4" />
                   <span>Pay Rate</span>
                 </div>
-                <div className="font-semibold">{formatCurrency(parseFloat(employee.user.payRate || '0'))}/hr</div>
+                {editingPayRate ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={payRateInput}
+                      onChange={(e) => setPayRateInput(e.target.value)}
+                      className="h-8 text-sm"
+                      data-testid="input-pay-rate"
+                      autoFocus
+                    />
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => {
+                        const parsed = parseFloat(payRateInput);
+                        if (isNaN(parsed) || parsed < 0) {
+                          toast({ title: "Invalid value", description: "Enter a valid pay rate.", variant: "destructive" });
+                          return;
+                        }
+                        updatePayRateMutation.mutate({ employeeId: employee.user.id, payRate: parsed.toFixed(2) });
+                      }}
+                      disabled={updatePayRateMutation.isPending}
+                      data-testid="button-save-pay-rate"
+                    >
+                      <Check className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => setEditingPayRate(false)}
+                      data-testid="button-cancel-pay-rate"
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold">{formatCurrency(parseFloat(employee.user.payRate || '0'))}/hr</span>
+                    {currentUser?.role === 'admin' && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => {
+                          setPayRateInput(parseFloat(employee.user.payRate || '0').toFixed(2));
+                          setEditingPayRate(true);
+                        }}
+                        data-testid="button-edit-pay-rate"
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
             <div className="flex items-center justify-between">
@@ -327,12 +413,67 @@ export default function EmployeeDetail() {
               </div>
               <div className="font-semibold">{formatDuration(employee.weeklyHours)}</div>
             </div>
-            <div className="flex items-center justify-between">
+            <div className="space-y-1">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Heart className="w-4 h-4" />
-                <span>Sick Time</span>
+                <span>Sick Time Balance</span>
               </div>
-              <div className="font-semibold">{formatDuration(parseFloat(employee.user.sickTimeBalance || '0'))}</div>
+              {editingSickTime ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    step="0.25"
+                    min="0"
+                    value={sickTimeInput}
+                    onChange={(e) => setSickTimeInput(e.target.value)}
+                    className="h-8 text-sm"
+                    data-testid="input-sick-time"
+                    autoFocus
+                  />
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">hrs</span>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => {
+                      const parsed = parseFloat(sickTimeInput);
+                      if (isNaN(parsed) || parsed < 0) {
+                        toast({ title: "Invalid value", description: "Enter a valid number of hours.", variant: "destructive" });
+                        return;
+                      }
+                      updateSickTimeMutation.mutate({ employeeId: employee.user.id, sickTimeBalance: parsed.toFixed(2) });
+                    }}
+                    disabled={updateSickTimeMutation.isPending}
+                    data-testid="button-save-sick-time"
+                  >
+                    <Check className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => setEditingSickTime(false)}
+                    data-testid="button-cancel-sick-time"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold">{formatDuration(parseFloat(employee.user.sickTimeBalance || '0'))}</span>
+                  {currentUser?.role === 'admin' && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => {
+                        setSickTimeInput(parseFloat(employee.user.sickTimeBalance || '0').toFixed(2));
+                        setEditingSickTime(true);
+                      }}
+                      data-testid="button-edit-sick-time"
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
             <div className="pt-4 border-t mt-4">
               <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">

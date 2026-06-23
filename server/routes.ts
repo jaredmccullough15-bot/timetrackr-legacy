@@ -380,6 +380,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update employee sick time balance - admin only
+  app.patch('/api/employees/:id/sick-time', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const currentUser = await storage.getUser(userId);
+
+      if (!isAdmin(currentUser)) {
+        return res.status(403).json({ message: "Forbidden: Admin access required" });
+      }
+
+      const employeeId = req.params.id;
+      const { sickTimeBalance } = req.body;
+
+      if (typeof sickTimeBalance !== 'string' || !/^\d+(\.\d{1,2})?$/.test(sickTimeBalance)) {
+        return res.status(400).json({ message: "Invalid sick time balance format" });
+      }
+
+      const updatedUser = await storage.updateUserSickTime(employeeId, sickTimeBalance);
+      res.json(updatedUser);
+    } catch (error: any) {
+      console.error("Error updating sick time:", error);
+      res.status(400).json({ message: error.message || "Failed to update sick time balance" });
+    }
+  });
+
   // Admin time entry management routes
   app.post('/api/admin/time-entries', isAuthenticated, async (req: any, res) => {
     try {
